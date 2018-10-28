@@ -1,0 +1,34 @@
+# Intellij
+.idea/
+*.iml
+*.iws
+.java-version
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# Compiled files
+*.class
+target/
+bin/
+
+# Log files
+*.log
+.log.
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.bkp
+.~
+
+# Cache
+.cache-main
+.cache-tests
+.ensime*
+*.drv
+*.nix
+tags
+
