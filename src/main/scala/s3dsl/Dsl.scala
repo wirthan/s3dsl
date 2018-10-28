@@ -2,7 +2,7 @@ package s3dsl
 
 import s3dsl.Dsl.S3Dsl.S3Config
 import s3dsl.domain.S3._
-import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
@@ -25,7 +25,7 @@ object Dsl {
     def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
     def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
     def doesObjectExist(path: Path): F[Boolean]
-    def list(path: Path): Stream[F, ObjectSummary]
+    def listObjects(path: Path): Stream[F, ObjectSummary]
     def putObject(path: Path, contentLength: Long): Sink[F, Byte]
     def deleteObject(path: Path): F[Unit]
 
@@ -46,8 +46,16 @@ object Dsl {
       val blockingEc = config.blockingEc
 
       implicit class SyncSyntax(val sync: Sync[F]) {
-        def shift[A](fa: => A): F[A] = cs.shift *> sync.delay(fa)
         def blocking[A](fa: => A): F[A] = cs.evalOn(blockingEc)(sync.delay(fa))
+      }
+
+      implicit class OptionFSyntax[A](val f: F[Option[A]]) {
+        def handle404: F[Option[A]] = f.recoverWith{ case e: AmazonS3Exception =>
+          e.getStatusCode match {
+            case 404 => F.pure(None)
+            case _ => F.raiseError(e)
+          }
+        }
       }
 
       new S3Dsl[F] {
@@ -71,10 +79,10 @@ object Dsl {
         //
 
         override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = for {
-          s3object <- F.blocking(Option(s3.getObject(path.bucket.value, path.key.value)))
+          s3object <- F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404
           obj <- s3object.traverse { o =>
             val isT: F[InputStream] = F.blocking(o.getObjectContent)
-            F.shift(Object[F](
+            F.delay(Object[F](
               stream = fs2.io.readInputStream[F](isT, chunkSize, blockingEc, closeAfterUse = true),
               meta = toMeta(o.getObjectMetadata))
             )
@@ -82,14 +90,14 @@ object Dsl {
         } yield obj
 
         override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
-          Option(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
-        )
+          Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
+        ).handle404
 
         override def doesObjectExist(path: Path): F[Boolean] = F.blocking(
           s3.doesObjectExist(path.bucket.value, path.key.value)
         )
 
-        override def list(path: Path): Stream[F, ObjectSummary] = {
+        override def listObjects(path: Path): Stream[F, ObjectSummary] = {
 
           def next(ol: ObjectListing): F[Option[(ObjectListing, ObjectListing)]] = Option(ol)
             .flatMap(_.isTruncated.option(ol))
