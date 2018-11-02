@@ -130,6 +130,10 @@ object Dsl {
 
         override def deleteObject(path: Path): F[Unit] = F.blocking(s3.deleteObject(path.bucket.value, path.key.value))
 
+        //
+        // Presigned URL
+        //
+
         override def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL] = F.delay(
           URL(
             s3.generatePresignedUrl(
