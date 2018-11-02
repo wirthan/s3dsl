@@ -1,10 +1,12 @@
 package s3dsl
 
+import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 
 import Dsl.S3Dsl._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
+import enumeratum.scalacheck._
 import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import eu.timepit.refined.cats.syntax._
@@ -171,6 +173,16 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           withBucket(prog) should returnValue(None)
         }.set(minTestsOk = 3, maxSize = 5)
       }
+    }
+
+    "generatePresignedUrl" should {
+
+      "succeed" in {
+        prop { (path: Path, expiration: ZonedDateTime, method: HTTPMethod) =>
+          s3.generatePresignedUrl(path, expiration, method) should returnOk[URL]
+        }
+      }
+
     }
 
   }

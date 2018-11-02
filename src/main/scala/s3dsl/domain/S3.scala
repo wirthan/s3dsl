@@ -1,15 +1,21 @@
 package s3dsl.domain
 
 import java.util.Date
+
 import eu.timepit.refined.api._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
+import com.amazonaws.{HttpMethod => AwsHttpMethod}
+import enumeratum.EnumEntry.Uppercase
+import enumeratum.{Enum, EnumEntry}
 
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
   "org.wartremover.warts.ImplicitConversion",
   "org.wartremover.warts.ImplicitParameter"))
 object S3 {
+
+  @newtype final case class URL(value: String)
 
   //
   // Bucket name & object key
@@ -56,5 +62,35 @@ object S3 {
                                  lastModified: Option[LastModified])
 
 
+  //
+  // HTTP Method
+  //
+
+  sealed trait HTTPMethod extends EnumEntry {
+    import s3dsl.domain.S3.HTTPMethod._
+
+    private[s3dsl] lazy val aws: AwsHttpMethod = fold(
+      delete = AwsHttpMethod.DELETE,
+      get = AwsHttpMethod.GET,
+      post = AwsHttpMethod.POST,
+      put = AwsHttpMethod.PUT
+    )
+
+    def fold[X](delete: => X, get: => X, post: => X, put: => X): X = this match {
+      case DELETE => delete
+      case GET => get
+      case POST => post
+      case PUT => put
+    }
+  }
+
+  object HTTPMethod extends Enum[HTTPMethod] {
+    val values = findValues
+
+    final case object DELETE extends HTTPMethod with Uppercase
+    final case object GET extends HTTPMethod with Uppercase
+    final case object POST extends HTTPMethod with Uppercase
+    final case object PUT extends HTTPMethod with Uppercase
+  }
 
 }

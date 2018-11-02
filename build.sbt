@@ -6,10 +6,12 @@ val catsEffectVersion = "1.0.0"
 val mouseVersion      = "0.18"
 val fs2Version        = "1.0.0"
 val refinedVersion    = "0.9.2"
+val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.4"
 
-val newtype = "io.estatico"  %% "newtype"         % "0.4.2"
-val awsS3   = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.283"
+val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
+val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.441"
 
 val refined = Seq(
   "eu.timepit" %% "refined"            % refinedVersion,
@@ -28,11 +30,13 @@ val cats = Seq(
 )
 
 val testDeps = Seq(
-  "org.specs2" %% "specs2-core"          % specs2Version,
-  "org.specs2" %% "specs2-matcher-extra" % specs2Version,
-  "org.specs2" %% "specs2-scalacheck"    % specs2Version,
-  "org.specs2" %% "specs2-cats"          % specs2Version,
-  "eu.timepit" %% "refined-scalacheck"   % refinedVersion
+  "org.specs2"        %% "specs2-core"           % specs2Version,
+  //"org.specs2"        %% "specs2-matcher-extra"  % specs2Version,
+  "org.specs2"        %% "specs2-scalacheck"     % specs2Version,
+  "org.specs2"        %% "specs2-cats"           % specs2Version,
+  "eu.timepit"        %% "refined-scalacheck"    % refinedVersion,
+  "io.chrisdavenport" %% "cats-scalacheck"       % "0.1.0",
+  "com.beachape"      %% "enumeratum-scalacheck" % enumeratumVersion
 ).map(_ % "test,it")
 
 lazy val wartsInTest = Warts.allBut(
@@ -74,5 +78,5 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype) ++ cats ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ fs2 ++ refined ++ testDeps
   )

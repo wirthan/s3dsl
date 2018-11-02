@@ -1,5 +1,7 @@
 package s3dsl
 
+import java.time.ZonedDateTime
+
 import s3dsl.Dsl.S3Dsl.S3Config
 import s3dsl.domain.S3._
 import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
@@ -29,6 +31,7 @@ object Dsl {
     def putObject(path: Path, contentLength: Long): Sink[F, Byte]
     def deleteObject(path: Path): F[Unit]
 
+    def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL]
   }
 
   object S3Dsl {
@@ -126,6 +129,16 @@ object Dsl {
         }
 
         override def deleteObject(path: Path): F[Unit] = F.blocking(s3.deleteObject(path.bucket.value, path.key.value))
+
+        override def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL] = F.delay(
+          URL(
+            s3.generatePresignedUrl(
+              path.bucket.value,
+              path.key.value,
+              new java.util.Date(expiration.getNano / 1000000L),
+              method.aws
+            ).toString)
+        )
 
       }
     }
