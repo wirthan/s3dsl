@@ -1,5 +1,6 @@
-version := "0.1"
+organization := "com.github.wirthan"
 
+name := "s3dsl"
 
 val catsVersion       = "1.4.0"
 val catsEffectVersion = "1.0.0"
@@ -48,7 +49,6 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  name := "s3dsl",
   scalaVersion := "2.12.7",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
@@ -69,7 +69,6 @@ lazy val projectSettings = Seq(
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 )
 
@@ -80,3 +79,44 @@ lazy val s3dsl = project.in(file("."))
     Defaults.itSettings,
     libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ fs2 ++ refined ++ testDeps
   )
+
+//
+// Release
+//
+
+releasePublishArtifactsAction := PgpKeys.publishSigned.value
+
+releaseProcess := {
+  import ReleaseTransformations._
+  releaseProcess.value.dropRight(1) ++ Seq[ReleaseStep](
+    releaseStepCommand("sonatypeRelease"),
+    pushChanges
+  )
+}
+
+//
+// Publishing
+//
+
+homepage := Some(url("https://github.com/mmz-srf/scala-xml-codec"))
+
+scmInfo := Some(ScmInfo(
+  url("https://github.com/wirthan/s3dsl"), "git@github.com:wirthan/s3dsl.git")
+)
+
+developers := List(
+  Developer(id = "wirthan", name="Andreas Wirth", email="andreas.wirth78@gmail.com", url = url("https://github.com/wirthan"))
+)
+
+licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
+
+publishMavenStyle := true
+
+publishTo := Some(
+  if (isSnapshot.value)
+    Opts.resolver.sonatypeSnapshots
+  else
+    Opts.resolver.sonatypeStaging
+)
+
+publishConfiguration := publishConfiguration.value.withOverwrite(true)
