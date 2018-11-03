@@ -1,8 +1,6 @@
 # s3dsl
 
-| Snapshot | Release |
-| --- | --- |
-| [![Snapshot Artifacts][Badge-SonatypeSnapshots]][Link-SonatypeSnapshots] | [![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases] |
+[![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases]
 
 Minimal, stream based S3 DSL. Depends on [aws-java-sdk-s3](https://github.com/aws/aws-sdk-java/tree/master/aws-java-sdk-s3).
 
@@ -40,4 +38,7 @@ val obj: Option[S3.Object[IO]] = for {
   obj <- s3.getObject(path, 1024)      
 } yield obj
 
-``` 
+```
+
+[Link-SonatypeReleases]: https://oss.sonatype.org/content/repositories/releases/com/github/wirthan/s3dsl_2.12/ "Sonatype Releases"
+[Badge-SonatypeReleases]: https://img.shields.io/nexus/r/https/oss.sonatype.org/com.github.wirthan/s3dsl.svg "Sonatype Releases"
