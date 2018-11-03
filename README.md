@@ -1,5 +1,9 @@
 # s3dsl
 
+| Snapshot | Release |
+| --- | --- |
+| [![Snapshot Artifacts][Badge-SonatypeSnapshots]][Link-SonatypeSnapshots] | [![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases] |
+
 Minimal, stream based S3 DSL. Depends on [aws-java-sdk-s3](https://github.com/aws/aws-sdk-java/tree/master/aws-java-sdk-s3).
 
 ## Usage
