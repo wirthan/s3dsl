@@ -4,9 +4,9 @@ name := "s3dsl"
 
 val catsVersion       = "1.4.0"
 val catsEffectVersion = "1.0.0"
-val mouseVersion      = "0.18"
+val mouseVersion      = "0.19"
 val fs2Version        = "1.0.0"
-val refinedVersion    = "0.9.2"
+val refinedVersion    = "0.9.3"
 val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.4"
 
@@ -32,7 +32,6 @@ val cats = Seq(
 
 val testDeps = Seq(
   "org.specs2"        %% "specs2-core"           % specs2Version,
-  //"org.specs2"        %% "specs2-matcher-extra"  % specs2Version,
   "org.specs2"        %% "specs2-scalacheck"     % specs2Version,
   "org.specs2"        %% "specs2-cats"           % specs2Version,
   "eu.timepit"        %% "refined-scalacheck"    % refinedVersion,
@@ -52,6 +51,7 @@ lazy val projectSettings = Seq(
   scalaVersion := "2.12.7",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
+    "-Xsource:2.13",
     "-language:higherKinds",
     "-language:implicitConversions",
     "-deprecation",

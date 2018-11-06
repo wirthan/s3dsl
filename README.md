@@ -7,7 +7,7 @@ Minimal, stream based S3 DSL. Depends on [aws-java-sdk-s3](https://github.com/aw
 ## Getting s3dsl
 If you're using SBT, add the following line to your build file:
 
-    libraryDependencies += "com.github.wirthan" % "s3dsl" % <version>
+    libraryDependencies += "com.github.wirthan" % "s3dsl_2.12" % <version>
 
 ## Quick Start
 
