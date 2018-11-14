@@ -58,6 +58,30 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
     }
 
+    "getBucketAcl" should {
+
+      "return Some if bucket exists" in {
+        prop { bn: BucketName =>
+          val prog = for {
+            _ <- s3.createBucket(bn)
+            acl <- s3.getBucketAcl(bn)
+            _ <- s3.deleteBucket(bn)
+          } yield acl
+
+          prog should returnValue{ acl: Option[AccessControlList] =>
+            acl should beSome
+          }
+        }
+      }.set(minTestsOk = 5, maxSize = 8)
+
+      "return None if bucket does not exist" in {
+        prop { bn: BucketName =>
+          s3.getBucketAcl(bn) should returnValue(None)
+        }
+      }
+
+    }
+
   }
 
   "Object" in {

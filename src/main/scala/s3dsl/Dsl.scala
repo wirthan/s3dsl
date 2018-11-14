@@ -24,6 +24,8 @@ object Dsl {
     def doesBucketExist(name: BucketName): F[Boolean]
     def listBuckets: F[List[BucketName]]
 
+    def getBucketAcl(name: BucketName): F[Option[AccessControlList]]
+
     def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
     def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
     def doesObjectExist(path: Path): F[Boolean]
@@ -76,6 +78,45 @@ object Dsl {
 
         override def listBuckets: F[List[BucketName]] =
           F.blocking(s3.listBuckets).map(_.asScala.toList.map(b => bucketNameOrErr(b.getName)))
+
+        //
+        // Bucket ACL
+        //
+
+        override def getBucketAcl(name: BucketName): F[Option[AccessControlList]] = {
+          import com.amazonaws.services.s3.model.{AccessControlList => AwsAcl, Permission => AwsPermission}
+
+          def fromAws(aws: AwsAcl): AccessControlList = {
+            val awsGrants = aws.getGrantsAsList.asScala.toList
+
+            val grants = awsGrants.map{ g =>
+              val grantee = Grantee(
+                // minio returns null for a grantee that is supposed to be the owner itself
+                identifier = Grantee.Identifier(Option(g.getGrantee.getIdentifier).getOrElse("")),
+                typeIdentifier = Grantee.TypeIdentifier(g.getGrantee.getTypeIdentifier),
+              )
+
+              val permission: Permission = g.getPermission match {
+                case p if p.name === AwsPermission.FullControl.name => Permission.FullControl
+                case p if p.name === AwsPermission.Read.name => Permission.Read
+                case p if p.name === AwsPermission.ReadAcp.name => Permission.ReadAcp
+                case p if p.name === AwsPermission.Write.name => Permission.Write
+                case p if p.name === AwsPermission.WriteAcp.name => Permission.WriteAcp
+              }
+
+              Grant(grantee, permission)
+            }
+
+            val owner = Owner(
+              id = Owner.Id(aws.getOwner.getId), // "" with minio
+              displayName = Owner.DisplayName(aws.getOwner.getDisplayName) // "" with minio
+            )
+
+            AccessControlList(grants, owner)
+          }
+
+          F.blocking(Option(s3.getBucketAcl(name.value)).map(fromAws)).handle404
+        }
 
         //
         // Object
