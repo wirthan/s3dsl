@@ -1,7 +1,6 @@
 package s3dsl.domain
 
 import java.util.Date
-
 import eu.timepit.refined.api._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
@@ -115,6 +114,7 @@ object S3 {
   final case class Grant(grantee: Grantee, permission: Permission)
 
   final case class AccessControlList(grants: List[Grant], owner: Owner)
+
 
   //
   // HTTP Method

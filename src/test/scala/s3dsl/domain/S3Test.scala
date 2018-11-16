@@ -55,6 +55,10 @@ object S3Test extends Specification with ValidatedMatchers with ScalaCheck {
         }
       }
 
+      "succeed for string containing *" in {
+        Key.validate("abc/*/def/*") should beValid
+      }
+
       "succeed for a string of size 1024" in {
         Key.validate("a" * 1024) should beValid
       }

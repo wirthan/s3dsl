@@ -5,6 +5,7 @@ name := "s3dsl"
 val catsVersion       = "1.4.0"
 val catsEffectVersion = "1.0.0"
 val mouseVersion      = "0.19"
+val circeVersion      = "0.10.0"
 val fs2Version        = "1.0.0"
 val refinedVersion    = "0.9.3"
 val enumeratumVersion = "1.5.13"
@@ -15,19 +16,26 @@ val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
 val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.441"
 
 val refined = Seq(
-  "eu.timepit" %% "refined"            % refinedVersion,
-  "eu.timepit" %% "refined-cats"       % refinedVersion
-)
+  "eu.timepit" %% "refined",
+  "eu.timepit" %% "refined-cats"
+).map(_ % refinedVersion)
 
 val fs2 = Seq(
-  "co.fs2" %% "fs2-core" % fs2Version,
-  "co.fs2" %% "fs2-io"   % fs2Version
-)
+  "co.fs2" %% "fs2-core",
+  "co.fs2" %% "fs2-io"
+).map(_ % fs2Version)
 
 val cats = Seq(
   "org.typelevel" %% "cats-core"   % catsVersion,
   "org.typelevel" %% "cats-effect" % catsEffectVersion,
   "org.typelevel" %% "mouse"       % mouseVersion,
+)
+
+val circe = Seq(
+  "io.circe"     %% "circe-core"       % circeVersion,
+  "io.circe"     %% "circe-generic"    % circeVersion,
+  "io.circe"     %% "circe-parser"     % circeVersion,
+  "com.beachape" %% "enumeratum-circe" % "1.5.18"
 )
 
 val testDeps = Seq(
@@ -77,7 +85,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //
