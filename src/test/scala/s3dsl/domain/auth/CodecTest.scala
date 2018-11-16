@@ -22,8 +22,8 @@ object CodecTest extends Specification with ScalaCheck {
   "Principal.Provider codec" should {
     "be correct" in {
       prop { provider: Principal.Provider =>
-        provider.asJson.asString should beSome(provider.entryName)
-        provider.entryName.asJson.as[Principal.Provider].toOption should beSome(provider)
+        provider.asJson.asString should beSome(provider.value)
+        provider.value.asJson.as[Principal.Provider].toOption should beSome(provider)
       }
     }
   }
@@ -38,20 +38,29 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "Set[Principal] codec" should {
-
-    "decode an example" in {
-      val principals = decode[Set[Principal]]("""
+    val exampleJson = """
           {
             "AWS": [
           	  "arn:aws:iam::ACCOUNT_ID:user/USERNAME_A",
           		"arn:aws:iam::ACCOUNT_ID:user/USERNAME_B"
           		]
-          }
-        """)
-      println(principals)
-      principals should beRight[Set[Principal] ]
+          }"""
 
+    "decode an example json" in {
+      decode[Set[Principal]](exampleJson) should beRight { p: Set[Principal] =>
+        p should haveSize(2)
+      }
     }
+
+    "be correct" in {
+      prop {p: Set[Principal] =>
+        decode[Set[Principal]](p.asJson.asString.getOrElse("")) should beRight{ p2: Set[Principal] =>
+          p2 should exactly(p)
+        }
+      }
+    }
+
+
 
   }
 

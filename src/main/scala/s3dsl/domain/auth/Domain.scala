@@ -4,7 +4,7 @@ import cats.Order
 import cats.implicits._
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
-import io.circe.generic.semiauto._
+import io.circe.syntax._
 import io.estatico.newtype.macros.newtype
 
 @SuppressWarnings(Array(
@@ -56,11 +56,22 @@ object Domain {
   final case class Principal(provider: Principal.Provider, id: Principal.Id)
 
   object Principal{
-    implicit lazy val setEncoder: Encoder[Set[Principal]] = deriveEncoder[List[(Provider, List[Id])]]
-      .contramap[Set[Principal]](s => s.toList.groupBy(_.provider).mapValues(_.map(_.id)).toList)
 
-    implicit lazy val setDecoder: Decoder[Set[Principal]] = deriveDecoder[List[(Provider, List[Id])]]
-      .map(_.flatMap(t => t._2.map(Principal(t._1, _))).toSet)
+    @SuppressWarnings(Array("org.wartremover.warts.ToString")) // compiler says _.provider.value is of type Provider ??
+    implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance{ set =>
+      val jsons = set.groupBy[String](_.provider.value.toString).mapValues(_.map(_.id)).toList.flatMap(t =>
+        t._2.map(t2 => (t._1, t2.asJson))
+      )
+      Json.obj(jsons: _*)
+    }
+
+    implicit lazy val setDecoder: Decoder[Set[Principal]] = Decoder.instance { c =>
+      val providers = c.keys.toList.flatten
+      providers.flatTraverse(p =>
+        c.downField(p).as[List[Principal.Id]].map(_.map(Principal(Principal.Provider(p), _)))
+      ).map(_.toSet)
+    }
+
 
     @newtype final case class Id(value: String)
     object Id {
@@ -70,21 +81,13 @@ object Domain {
       lazy val all: Id = Id("*")
     }
 
-    sealed abstract class Provider(override val entryName: String) extends EnumEntry {
-      def fold[X](aws: => X, all: => X): X = this match {
-        case Provider.AWS => aws
-        case Provider.All => all
-      }
-    }
-    object Provider extends Enum[Provider] {
-      implicit lazy val order: Order[Provider] = Order.by(_.entryName)
-      implicit lazy val encoder: Encoder[Provider] = enumeratum.Circe.encoder(Provider)
-      implicit lazy val decoder: Decoder[Provider] = enumeratum.Circe.decoder(Provider)
-
-      lazy val values = findValues
-
-      final case object AWS extends Provider("AWS")
-      final case object All extends Provider("*")
+    @newtype final case class Provider(value: String)
+    object Provider {
+      implicit lazy val order: Order[Provider] = deriving
+      implicit lazy val encoder: Encoder[Provider] = deriving
+      implicit lazy val decoder: Decoder[Provider] = deriving
+      lazy val all: Provider = Provider("*")
+      lazy val aws: Provider = Provider("AWS")
     }
   }
 

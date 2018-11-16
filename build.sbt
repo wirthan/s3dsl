@@ -39,12 +39,13 @@ val circe = Seq(
 )
 
 val testDeps = Seq(
-  "org.specs2"        %% "specs2-core"           % specs2Version,
-  "org.specs2"        %% "specs2-scalacheck"     % specs2Version,
-  "org.specs2"        %% "specs2-cats"           % specs2Version,
-  "eu.timepit"        %% "refined-scalacheck"    % refinedVersion,
-  "io.chrisdavenport" %% "cats-scalacheck"       % "0.1.0",
-  "com.beachape"      %% "enumeratum-scalacheck" % enumeratumVersion
+  "org.specs2"                 %% "specs2-core"               % specs2Version,
+  "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
+  "org.specs2"                 %% "specs2-cats"               % specs2Version,
+  //"com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
+  "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
+  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
+  "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion
 ).map(_ % "test,it")
 
 lazy val wartsInTest = Warts.allBut(
