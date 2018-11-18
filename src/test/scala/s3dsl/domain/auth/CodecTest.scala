@@ -8,6 +8,8 @@ import io.circe.parser.decode
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 
+// TODO: Some of the json values can either be a String or an Array
+// Examples: https://gist.github.com/magnetikonline/6215d9e80021c1f8de12
 object CodecTest extends Specification with ScalaCheck {
 
   "Action codec" should {
@@ -22,8 +24,8 @@ object CodecTest extends Specification with ScalaCheck {
   "Principal.Provider codec" should {
     "be correct" in {
       prop { provider: Principal.Provider =>
-        provider.asJson.asString should beSome(provider.value)
-        provider.value.asJson.as[Principal.Provider].toOption should beSome(provider)
+        provider.asJson.asString should beSome(provider.v)
+        provider.v.asJson.as[Principal.Provider].toOption should beSome(provider)
       }
     }
   }
@@ -31,13 +33,14 @@ object CodecTest extends Specification with ScalaCheck {
   "Principal.Id codec" should {
     "be correct" in {
       prop { id: Principal.Id =>
-        id.asJson.asString should beSome(id.value)
-        id.value.asJson.as[Principal.Id].toOption should beSome(id)
+        id.asJson.asString should beSome(id.v)
+        id.v.asJson.as[Principal.Id].toOption should beSome(id)
       }
     }
   }
 
   "Set[Principal] codec" should {
+    import Principal._
     val exampleJson = """
           {
             "AWS": [
@@ -54,14 +57,59 @@ object CodecTest extends Specification with ScalaCheck {
 
     "be correct" in {
       prop {p: Set[Principal] =>
-        decode[Set[Principal]](p.asJson.asString.getOrElse("")) should beRight{ p2: Set[Principal] =>
-          p2 should exactly(p)
+        p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] =>
+          p2 should containAllOf(p.toList)
         }
       }
     }
-
-
-
   }
+
+  "Effect codec" should {
+    "be correct" in {
+      val (allow, deny): (Effect, Effect) = (Effect.Allow, Effect.Deny)
+
+      allow.asJson.asString should beSome("Allow")
+      deny.asJson.asString should beSome("Deny")
+      allow.asJson.as[Effect] should beRight(Effect.Allow)
+      deny.asJson.as[Effect] should beRight(Effect.Deny)
+    }
+  }
+
+  "Condition codec" should {
+    "be correct for an example json" in {
+      val exampleJson = """
+        {
+          "StringLike": {
+            "aws:Referer": [
+              "http://domain.com/*",
+              "http://www.domain.com/*"
+            ]
+          }
+        }"""
+
+      decode[Set[Condition]](exampleJson) should beRight { p: Set[Condition] =>
+        p should haveSize(1)
+      }
+    }
+
+    "be correct" in {
+      ko
+    }
+  }
+
+  "Resource coded" should {
+    "be correct" in {
+      prop {r: Resource =>
+        r.asJson.as[Resource] should beRight
+      }
+    }
+  }
+
+  "Policy codec" should {
+    "be correct" in {
+      ko
+    }
+  }
+
 
 }

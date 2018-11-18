@@ -1,10 +1,11 @@
 package s3dsl.domain.auth
 
-import cats.Order
+import cats.{Order, Eq}
 import cats.implicits._
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
 import io.circe.syntax._
+import io.circe.generic.semiauto._
 import io.estatico.newtype.macros.newtype
 
 @SuppressWarnings(Array(
@@ -23,8 +24,6 @@ object Domain {
   }
 
 
-  // TODO: Some of the json values can either be a String or an Array
-  // https://gist.github.com/magnetikonline/6215d9e80021c1f8de12
   final case class Statement(id: String,
                              effect: Effect,
                              principals: Set[Principal],
@@ -32,22 +31,43 @@ object Domain {
                              resources: Set[Resource],
                              conditions: Set[Condition])
 
-  @newtype final case class Resource(value: String)
+  @newtype final case class Resource(v: String)
+  object Resource {
+    implicit lazy val order: Order[Resource] = deriving
+    implicit lazy val encoder: Encoder[Resource] = deriving
+    implicit lazy val decoder: Decoder[Resource] = deriving
+  }
 
-  final case class Condition(kind: String, conditionKey: String, values: List[String])
+  final case class Condition(kind: String, condition: Map[String, Set[String]])
+  object Condition {
+    implicit lazy val eq: Eq[Effect] = Eq.fromUniversalEquals[Effect]
+    implicit lazy val encoder: Encoder[Condition] = deriveEncoder
+    implicit lazy val decoder: Decoder[Condition] = deriveDecoder
+
+
+  }
 
   //
   // Effect
   //
 
-  sealed trait Effect {
+  sealed trait Effect extends EnumEntry {
     def fold[X](allow: => X, deny: => X): X = this match {
-      case Allow => allow
-      case Deny  => deny
+      case Effect.Allow => allow
+      case Effect.Deny  => deny
     }
   }
-  final case object Allow extends Effect
-  final case object Deny extends Effect
+  object Effect extends Enum[Effect] {
+    implicit lazy val eq: Order[Effect] = Order.by[Effect, String](_.entryName)
+    implicit lazy val encoder: Encoder[Effect] = enumeratum.Circe.encoder(Effect)
+    implicit lazy val decoder: Decoder[Effect] = enumeratum.Circe.decoder(Effect)
+
+    lazy val values = findValues
+
+    final case object Allow extends Effect
+    final case object Deny extends Effect
+  }
+
 
   //
   // Principal
@@ -55,25 +75,22 @@ object Domain {
 
   final case class Principal(provider: Principal.Provider, id: Principal.Id)
 
-  object Principal{
+  object Principal {
 
-    @SuppressWarnings(Array("org.wartremover.warts.ToString")) // compiler says _.provider.value is of type Provider ??
-    implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance{ set =>
-      val jsons = set.groupBy[String](_.provider.value.toString).mapValues(_.map(_.id)).toList.flatMap(t =>
-        t._2.map(t2 => (t._1, t2.asJson))
+    private val mapEncoder = implicitly[Encoder[Map[String, List[String]]]]
+    implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance { set =>
+      val map = set.map(p => p.provider.v -> p.id.v).groupBy(_._1).mapValues(_.map(_._2).toList)
+      map.asJson(mapEncoder) : Json
+    }
+
+    private val mapDecoder = implicitly[Decoder[Map[String, List[String]]]]
+    implicit lazy val setDecoder: Decoder[Set[Principal]] = mapDecoder.map(m =>
+      m.flatMap(t =>
+        t._2.map(i => Principal(Provider(t._1), Id(i)))
       )
-      Json.obj(jsons: _*)
-    }
+    ).map(_.toSet)
 
-    implicit lazy val setDecoder: Decoder[Set[Principal]] = Decoder.instance { c =>
-      val providers = c.keys.toList.flatten
-      providers.flatTraverse(p =>
-        c.downField(p).as[List[Principal.Id]].map(_.map(Principal(Principal.Provider(p), _)))
-      ).map(_.toSet)
-    }
-
-
-    @newtype final case class Id(value: String)
+    @newtype final case class Id(v: String)
     object Id {
       implicit lazy val order: Order[Id] = deriving
       implicit lazy val encoder: Encoder[Id] = deriving
@@ -81,7 +98,7 @@ object Domain {
       lazy val all: Id = Id("*")
     }
 
-    @newtype final case class Provider(value: String)
+    @newtype final case class Provider(v: String)
     object Provider {
       implicit lazy val order: Order[Provider] = deriving
       implicit lazy val encoder: Encoder[Provider] = deriving

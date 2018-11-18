@@ -35,6 +35,7 @@ val circe = Seq(
   "io.circe"     %% "circe-core"       % circeVersion,
   "io.circe"     %% "circe-generic"    % circeVersion,
   "io.circe"     %% "circe-parser"     % circeVersion,
+  "io.circe"     %% "circe-refined"    % circeVersion,
   "com.beachape" %% "enumeratum-circe" % "1.5.18"
 )
 
