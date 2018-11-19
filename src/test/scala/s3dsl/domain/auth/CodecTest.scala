@@ -1,12 +1,17 @@
 package s3dsl.domain.auth
 
+import java.io.File
+
 import s3dsl.domain.Gens._
 import enumeratum.scalacheck.arbEnumEntry
+import io.circe.Json
 import s3dsl.domain.auth.Domain._
 import io.circe.syntax._
 import io.circe.parser.decode
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
+
+import scala.io.Source
 
 // TODO: Some of the json values can either be a String or an Array
 // Examples: https://gist.github.com/magnetikonline/6215d9e80021c1f8de12
@@ -26,7 +31,7 @@ object CodecTest extends Specification with ScalaCheck {
       prop { provider: Principal.Provider =>
         provider.asJson.asString should beSome(provider.v)
         provider.v.asJson.as[Principal.Provider].toOption should beSome(provider)
-      }
+      }.set(maxSize = 10)
     }
   }
 
@@ -35,7 +40,7 @@ object CodecTest extends Specification with ScalaCheck {
       prop { id: Principal.Id =>
         id.asJson.asString should beSome(id.v)
         id.v.asJson.as[Principal.Id].toOption should beSome(id)
-      }
+      }.set(maxSize = 10)
     }
   }
 
@@ -60,7 +65,7 @@ object CodecTest extends Specification with ScalaCheck {
         p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] =>
           p2 should containAllOf(p.toList)
         }
-      }
+      }.set(maxSize = 20)
     }
   }
 
@@ -93,23 +98,54 @@ object CodecTest extends Specification with ScalaCheck {
     }
 
     "be correct" in {
-      ko
+      prop {c: Set[Condition] =>
+        c.asJson.as[Set[Condition]] should beRight{ c2: Set[Condition] =>
+          c2 should containAllOf(c.toList)
+        }
+      }.set(maxSize = 20)
     }
   }
 
   "Resource coded" should {
     "be correct" in {
       prop {r: Resource =>
-        r.asJson.as[Resource] should beRight
-      }
+        r.asJson.as[Resource] should beRight{ r2: Resource =>
+          r2 should be_==(r)
+        }
+      }.set(maxSize = 10)
+    }
+  }
+
+  "Statement codec" should {
+    "be correct" in {
+      prop {s: Statement =>
+        s.asJson.as[Statement] should beRight{ s2: Statement =>
+          s2 should be_==(s)
+        }
+      }.set(maxSize = 20)
     }
   }
 
   "Policy codec" should {
     "be correct" in {
-      ko
+      prop {p: Policy =>
+        p.asJson.as[Policy] should beRight{ p2: Policy =>
+          p2 should be_==(p)
+        }
+      }.set(maxSize = 20)
+    }
+
+    "be able to decode a set of examples" in {
+      loadFiles("src/test/resources/authpolicies/", "json").map(s =>
+        Json.fromString(s).as[Policy] should beRight
+      )
     }
   }
 
+  def loadFiles(path: String, ext: String) = new File(path)
+    .listFiles
+    .filter(_.getName.endsWith(s".$ext"))
+    .map(f => Source.fromFile(f).mkString)
+    .toList
 
 }

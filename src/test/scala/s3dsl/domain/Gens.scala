@@ -1,17 +1,45 @@
 package s3dsl.domain
 
+
 import cats.Applicative
+import cats.data.NonEmptyMap
+import cats.implicits._
 import io.estatico.newtype.Coercible
-import org.scalacheck.{Arbitrary, Gen}
-import s3dsl.domain.auth.Domain.Principal
-import org.scalacheck.cats.instances.GenInstances._
+import org.scalacheck.Arbitrary
+import s3dsl.domain.auth.Domain._
+import org.scalacheck.cats.implicits._
+import scala.collection.immutable.SortedMap
+import org.scalacheck.Gen
+import org.scalacheck.ScalacheckShapeless._
 
 object Gens {
+  private val smallStringSetGen = Gen.buildableOf[Set[String], String](Gen.alphaNumStr).map(_.take(7))
+  private lazy val sortedStringStringSetMapGen = for {
+    keys <- smallStringSetGen
+    kv <- keys.toList.traverse(k =>
+      Applicative[Gen].map2(Gen.const(k), smallStringSetGen)((a, b) => (a, b))
+    )
+  } yield SortedMap(kv:_*)
+
   implicit def coercibleArb[R, N](implicit ev: Coercible[Arbitrary[R], Arbitrary[N]], R: Arbitrary[R]): Arbitrary[N] = ev(R)
 
-  def principalGen(implicit a: Arbitrary[Principal.Provider], b: Arbitrary[Principal.Id]): Gen[Principal] = Applicative[Gen].map2(
-    a.arbitrary, b.arbitrary
-  )((a2, b2) => Principal(a2, b2))
+  implicit lazy val principalArb = implicitly[Arbitrary[Set[Principal]]]
 
-  implicit val principalArb: Arbitrary[Principal] = Arbitrary(principalGen)
+  implicit lazy val nemArb: Arbitrary[NonEmptyMap[String, Set[String]]] = Arbitrary(
+      sortedStringStringSetMapGen.suchThat(_.nonEmpty).map(m => NonEmptyMap.fromMapUnsafe(m))
+  )
+
+  lazy val conditionGen = for {
+    types <- smallStringSetGen.map(_.toList)
+    list <- types.traverse(s =>
+      Applicative[Gen].map2(Gen.const(s), nemArb.arbitrary)((a, b) => Condition(a, b))
+    )
+  } yield list.toSet
+
+  implicit lazy val conditionArb = Arbitrary(conditionGen)
+
+  implicit lazy val statementArb = implicitly[Arbitrary[Statement]]
+
+  implicit lazy val policyArb = implicitly[Arbitrary[Policy]]
+
 }

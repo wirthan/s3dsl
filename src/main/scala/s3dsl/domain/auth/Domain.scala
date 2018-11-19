@@ -1,11 +1,12 @@
 package s3dsl.domain.auth
 
-import cats.{Order, Eq}
+import cats.data.NonEmptyMap
+import cats.{Eq, Order}
 import cats.implicits._
+import cats.implicits.catsKernelStdOrderForTuple2
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
 import io.circe.syntax._
-import io.circe.generic.semiauto._
 import io.estatico.newtype.macros.newtype
 
 @SuppressWarnings(Array(
@@ -18,11 +19,19 @@ object Domain {
   final case class Policy(id: String, version: Policy.Version, statements: List[Statement])
 
   object Policy {
+    implicit lazy val eq: Eq[Policy] = Eq.fromUniversalEquals[Policy]
+    implicit lazy val encoder: Encoder[Policy] =
+      Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
+    implicit lazy val decoder: Decoder[Policy] = Decoder.forProduct3("Id", "Version", "Statement")(Policy.apply)
+
     @newtype final case class Version(value: String)
-
-    lazy val defaultVersion: Version = Version("2012-10-17")
+    object Version {
+      lazy val defaultVersion: Version = Version("2012-10-17")
+      implicit lazy val eq: Eq[Version] = deriving
+      implicit lazy val encoder: Encoder[Version] = deriving
+      implicit lazy val decoder: Decoder[Version] = deriving
+    }
   }
-
 
   final case class Statement(id: String,
                              effect: Effect,
@@ -31,6 +40,16 @@ object Domain {
                              resources: Set[Resource],
                              conditions: Set[Condition])
 
+  object Statement {
+    implicit lazy val eq: Eq[Statement] = Eq.fromUniversalEquals[Statement]
+    implicit lazy val order: Order[Statement] = Order.by(_.id)
+    implicit lazy val encoder: Encoder[Statement] =
+      Encoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(s =>
+        (s.id, s.effect, s.principals, s.actions, s.resources, s.conditions))
+    implicit lazy val decoder: Decoder[Statement] =
+      Decoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(Statement.apply)
+  }
+
   @newtype final case class Resource(v: String)
   object Resource {
     implicit lazy val order: Order[Resource] = deriving
@@ -38,12 +57,20 @@ object Domain {
     implicit lazy val decoder: Decoder[Resource] = deriving
   }
 
-  final case class Condition(kind: String, condition: Map[String, Set[String]])
+  final case class Condition(kind: String, condition: NonEmptyMap[String, Set[String]])
   object Condition {
-    implicit lazy val eq: Eq[Effect] = Eq.fromUniversalEquals[Effect]
-    implicit lazy val encoder: Encoder[Condition] = deriveEncoder
-    implicit lazy val decoder: Decoder[Condition] = deriveDecoder
+    implicit lazy val eq: Eq[Condition] = Eq.fromUniversalEquals[Condition]
 
+    private val mapMapEncoder = implicitly[Encoder[Map[String, Map[String, Set[String]]]]]
+    implicit lazy val setEncoder: Encoder[Set[Condition]] = Encoder.instance { set =>
+      val map = set.map(c => c.kind -> (c.condition.toSortedMap: Map[String, Set[String]]).map(cc => (cc._1, cc._2)))
+      map.toMap.asJson(mapMapEncoder): Json
+    }
+
+    private val mapMapDecoder = implicitly[Decoder[Map[String, NonEmptyMap[String, Set[String]]]]]
+    implicit lazy val setDecoder: Decoder[Set[Condition]] = mapMapDecoder.map(m =>
+      m.map(t => Condition(t._1, t._2)).toSet
+    )
 
   }
 
@@ -76,19 +103,21 @@ object Domain {
   final case class Principal(provider: Principal.Provider, id: Principal.Id)
 
   object Principal {
+    implicit lazy val eq: Eq[Principal] = Eq.fromUniversalEquals[Principal]
+    implicit lazy val order: Order[Principal] = Order.by[Principal, (Provider, Id)](p => (p.provider, p.id))
 
     private val mapEncoder = implicitly[Encoder[Map[String, List[String]]]]
     implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance { set =>
       val map = set.map(p => p.provider.v -> p.id.v).groupBy(_._1).mapValues(_.map(_._2).toList)
-      map.asJson(mapEncoder) : Json
+      map.asJson(mapEncoder): Json
     }
 
     private val mapDecoder = implicitly[Decoder[Map[String, List[String]]]]
     implicit lazy val setDecoder: Decoder[Set[Principal]] = mapDecoder.map(m =>
       m.flatMap(t =>
         t._2.map(i => Principal(Provider(t._1), Id(i)))
-      )
-    ).map(_.toSet)
+      ).toSet
+    )
 
     @newtype final case class Id(v: String)
     object Id {

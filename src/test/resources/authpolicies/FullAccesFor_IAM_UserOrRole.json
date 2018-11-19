@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "s3:*"
+      ],
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::ACCOUNT_ID:user/USERNAME_A",
+          "arn:aws:iam::ACCOUNT_ID:user/USERNAME_B",
+          "arn:aws:iam::ACCOUNT_ID:user/USERNAME_C",
+          "arn:aws:iam::ACCOUNT_ID:role/ROLE_A",
+          "arn:aws:iam::ACCOUNT_ID:role/ROLE_B",
+          "arn:aws:iam::ACCOUNT_ID:role/ROLE_C"
+        ]
+      },
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME",
+        "arn:aws:s3:::BUCKET_NAME/*"
+      ]
+    }
+  ]
+}

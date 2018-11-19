@@ -43,7 +43,7 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  //"com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
+  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion
@@ -79,7 +79,8 @@ lazy val projectSettings = Seq(
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
 )
 
 lazy val s3dsl = project.in(file("."))

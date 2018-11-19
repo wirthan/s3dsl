@@ -1,0 +1,51 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:delimiter": [
+            "/"
+          ],
+          "s3:prefix": [
+            "",
+            "BUCKET_PATH/"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME"
+      ]
+    },
+    {
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "BUCKET_PATH/BUCKET_SUB_PATH/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME"
+      ]
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:PutObject"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME/BUCKET_PATH/BUCKET_SUB_PATH/*"
+      ]
+    }
+  ]
+}
