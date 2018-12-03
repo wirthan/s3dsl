@@ -5,7 +5,7 @@ name := "s3dsl"
 val catsVersion       = "1.4.0"
 val catsEffectVersion = "1.0.0"
 val mouseVersion      = "0.19"
-val circeVersion      = "0.10.0"
+val circeVersion      = "0.10.1"
 val fs2Version        = "1.0.0"
 val refinedVersion    = "0.9.3"
 val enumeratumVersion = "1.5.13"
@@ -32,11 +32,12 @@ val cats = Seq(
 )
 
 val circe = Seq(
-  "io.circe"     %% "circe-core"       % circeVersion,
-  "io.circe"     %% "circe-generic"    % circeVersion,
-  "io.circe"     %% "circe-parser"     % circeVersion,
-  "io.circe"     %% "circe-refined"    % circeVersion,
-  "com.beachape" %% "enumeratum-circe" % "1.5.18"
+  "io.circe"     %% "circe-core"           % circeVersion,
+  "io.circe"     %% "circe-generic"        % circeVersion,
+  "io.circe"     %% "circe-generic-extras" % circeVersion,
+  "io.circe"     %% "circe-parser"         % circeVersion,
+  "io.circe"     %% "circe-refined"        % circeVersion,
+  "com.beachape" %% "enumeratum-circe"     % "1.5.18"
 )
 
 val testDeps = Seq(
@@ -46,7 +47,8 @@ val testDeps = Seq(
   "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
-  "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion
+  "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
+  "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")
 
 lazy val wartsInTest = Warts.allBut(

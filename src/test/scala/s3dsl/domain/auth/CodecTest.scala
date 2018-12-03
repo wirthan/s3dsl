@@ -7,6 +7,7 @@ import enumeratum.scalacheck.arbEnumEntry
 import io.circe.Json
 import s3dsl.domain.auth.Domain._
 import io.circe.syntax._
+import io.circe.literal._
 import io.circe.parser.decode
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
@@ -18,7 +19,7 @@ import scala.io.Source
 object CodecTest extends Specification with ScalaCheck {
 
   "Action codec" should {
-    "be correct" in {
+    "be reversible" in {
       prop { action: S3Action =>
         action.asJson.asString should beSome(action.entryName)
         action.entryName.asJson.as[S3Action].toOption should beSome(action)
@@ -27,7 +28,7 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "Principal.Provider codec" should {
-    "be correct" in {
+    "be reversible" in {
       prop { provider: Principal.Provider =>
         provider.asJson.asString should beSome(provider.v)
         provider.v.asJson.as[Principal.Provider].toOption should beSome(provider)
@@ -36,7 +37,7 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "Principal.Id codec" should {
-    "be correct" in {
+    "be reversible" in {
       prop { id: Principal.Id =>
         id.asJson.asString should beSome(id.v)
         id.v.asJson.as[Principal.Id].toOption should beSome(id)
@@ -60,7 +61,7 @@ object CodecTest extends Specification with ScalaCheck {
       }
     }
 
-    "be correct" in {
+    "be reversible" in {
       prop {p: Set[Principal] =>
         p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] =>
           p2 should containAllOf(p.toList)
@@ -70,7 +71,7 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "Effect codec" should {
-    "be correct" in {
+    "be reversible" in {
       val (allow, deny): (Effect, Effect) = (Effect.Allow, Effect.Deny)
 
       allow.asJson.asString should beSome("Allow")
@@ -97,7 +98,7 @@ object CodecTest extends Specification with ScalaCheck {
       }
     }
 
-    "be correct" in {
+    "be reversible" in {
       prop {c: Set[Condition] =>
         c.asJson.as[Set[Condition]] should beRight{ c2: Set[Condition] =>
           c2 should containAllOf(c.toList)
@@ -107,7 +108,7 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "Resource coded" should {
-    "be correct" in {
+    "be reversible" in {
       prop {r: Resource =>
         r.asJson.as[Resource] should beRight{ r2: Resource =>
           r2 should be_==(r)
@@ -116,36 +117,72 @@ object CodecTest extends Specification with ScalaCheck {
     }
   }
 
-  "Statement codec" should {
-    "be correct" in {
-      prop {s: Statement =>
-        s.asJson.as[Statement] should beRight{ s2: Statement =>
-          s2 should be_==(s)
-        }
+  "StatementWrite codec" should {
+    "be reversible" in {
+      prop {s: StatementWrite =>
+        s.asJson.as[StatementWrite] should beRight{ s2: StatementWrite => s2 should be_==(s) }
       }.set(maxSize = 20)
     }
   }
 
-  "Policy codec" should {
-    "be correct" in {
-      prop {p: Policy =>
-        p.asJson.as[Policy] should beRight{ p2: Policy =>
-          p2 should be_==(p)
-        }
+  "StatementRead codec" should {
+
+    "be reversible" in {
+      prop {s: StatementRead =>
+        s.asJson.as[StatementRead] should beRight{ s2: StatementRead => s2 should be_==(s) }
       }.set(maxSize = 20)
     }
 
+    "decode a simple example" in {
+      val json = json"""{
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": [
+                      "*"
+                    ]
+                  },
+                  "Resource": [
+                    "arn:aws:s3:::BUCKET_NAME/*"
+                  ]
+                }"""
+
+      json.as[StatementRead] should beRight
+    }
+  }
+
+  "PolicyWrite codec" should {
+    "be reversible" in {
+      prop {p: PolicyWrite =>
+        p.asJson.as[PolicyWrite] should beRight{ p2: PolicyWrite => p2 should be_==(p) }
+      }.set(maxSize = 20)
+    }
+  }
+
+  "PolicyRead codec" should {
+    "be reversible" in {
+      prop {p: PolicyRead =>
+        p.asJson.as[PolicyRead] should beRight{ p2: PolicyRead => p2 should be_==(p) }
+      }.set(maxSize = 20)
+    }
+
+    "decode minimal json" in {
+      json"""{ "Version": "2012-10-17"}""".as[PolicyRead].map(_.version) should beRight(Policy.Version("2012-10-17"))
+    }
+    
     "be able to decode a set of examples" in {
-      loadFiles("src/test/resources/authpolicies/", "json").map(s =>
-        Json.fromString(s).as[Policy] should beRight
-      )
+      loadFiles("src/test/resources/authpolicies/", "json").map { s =>
+        Json.fromString(s).as[PolicyRead] should beRight
+      }
     }
   }
 
   def loadFiles(path: String, ext: String) = new File(path)
     .listFiles
     .filter(_.getName.endsWith(s".$ext"))
-    .map(f => Source.fromFile(f).mkString)
+    .map(f => Source.fromFile(f).mkString.trim)
     .toList
 
 }

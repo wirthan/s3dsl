@@ -16,13 +16,12 @@ import io.estatico.newtype.macros.newtype
 object Domain {
   // "Principal" has permission to do "Action" to "Resource" where "Condition" applies.
 
-  final case class Policy(id: String, version: Policy.Version, statements: List[Statement])
+  //
+  // Policy
+  //
 
+  sealed trait Policy
   object Policy {
-    implicit lazy val eq: Eq[Policy] = Eq.fromUniversalEquals[Policy]
-    implicit lazy val encoder: Encoder[Policy] =
-      Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
-    implicit lazy val decoder: Decoder[Policy] = Decoder.forProduct3("Id", "Version", "Statement")(Policy.apply)
 
     @newtype final case class Version(value: String)
     object Version {
@@ -33,22 +32,88 @@ object Domain {
     }
   }
 
-  final case class Statement(id: String,
-                             effect: Effect,
-                             principals: Set[Principal],
-                             actions: Set[S3Action],
-                             resources: Set[Resource],
-                             conditions: Set[Condition])
+  final case class PolicyWrite(id: Option[String],
+                               version: Policy.Version,
+                               statements: List[StatementWrite]) extends Policy
 
-  object Statement {
-    implicit lazy val eq: Eq[Statement] = Eq.fromUniversalEquals[Statement]
-    implicit lazy val order: Order[Statement] = Order.by(_.id)
-    implicit lazy val encoder: Encoder[Statement] =
+  object PolicyWrite {
+    implicit lazy val eq: Eq[PolicyWrite] = Eq.fromUniversalEquals[PolicyWrite]
+
+    implicit lazy val encoder: Encoder[PolicyWrite] =
+      Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
+
+    implicit private[s3dsl] lazy val decoder: Decoder[PolicyWrite] =
+      Decoder.forProduct3("Id", "Version", "Statement")(PolicyWrite.apply)
+  }
+
+  final case class PolicyRead(id: Option[String],
+                              version: Policy.Version,
+                              statements: List[StatementRead]) extends Policy
+
+  object PolicyRead {
+    implicit lazy val eq: Eq[PolicyRead] = Eq.fromUniversalEquals[PolicyRead]
+
+    implicit lazy val decoder: Decoder[PolicyRead] =
+      Decoder.forProduct3[PolicyRead, Option[String], Policy.Version, List[StatementRead]](
+      "Id", "Version", "Statement"
+    )((id, version, statement) => PolicyRead(id, version, statement))
+
+    implicit private[s3dsl] lazy val encoder: Encoder[PolicyRead] =
+      Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
+  }
+
+
+  //
+  // Statement
+  //
+
+  final case class StatementWrite(id: String,
+                                  effect: Effect,
+                                  principals: Set[Principal],
+                                  actions: Set[S3Action],
+                                  resources: Set[Resource],
+                                  conditions: Set[Condition])
+
+  object StatementWrite {
+    implicit lazy val eq: Eq[StatementWrite] = Eq.fromUniversalEquals[StatementWrite]
+
+    implicit lazy val order: Order[StatementWrite] = Order.by(_.id)
+
+    implicit lazy val encoder: Encoder[StatementWrite] =
       Encoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(s =>
         (s.id, s.effect, s.principals, s.actions, s.resources, s.conditions))
-    implicit lazy val decoder: Decoder[Statement] =
-      Decoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(Statement.apply)
+
+    private[s3dsl] implicit lazy val decoder: Decoder[StatementWrite] =
+      Decoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(StatementWrite.apply)
   }
+
+  final case class StatementRead(id: Option[String],
+                                 effect: Effect,
+                                 principals: Set[Principal],
+                                 actions: Set[S3Action],
+                                 resources: Set[Resource],
+                                 conditions: Set[Condition])
+
+  object StatementRead {
+    implicit lazy val eq: Eq[StatementRead] = Eq.fromUniversalEquals[StatementRead]
+
+    private[s3dsl] implicit lazy val encoder: Encoder[StatementRead] =
+      Encoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(s =>
+        (s.id, s.effect, s.principals, s.actions, s.resources, s.conditions))
+
+    implicit lazy val decoder: Decoder[StatementRead] = (c: HCursor) => for {
+      id <- c.downField("Sid").success.flatTraverse(_.as[Option[String]])
+      effect <- c.downField("Effect").as[Effect]
+      principals <- decodeSet[Principal](c, "Principal")
+      actions <- decodeSet[S3Action](c, "Action")
+      resources <- decodeSet[Resource](c, "Resource")
+      conditions <- decodeSet[Condition](c, "Condition")
+    } yield StatementRead(id, effect, principals, actions, resources, conditions)
+  }
+
+  //
+  // Resource
+  //
 
   @newtype final case class Resource(v: String)
   object Resource {
@@ -56,6 +121,10 @@ object Domain {
     implicit lazy val encoder: Encoder[Resource] = deriving
     implicit lazy val decoder: Decoder[Resource] = deriving
   }
+
+  //
+  // Condition
+  //
 
   final case class Condition(kind: String, condition: NonEmptyMap[String, Set[String]])
   object Condition {
@@ -194,4 +263,7 @@ object Domain {
     final case object GetBucketLifecycleConfiguration extends S3Action("s3:GetLifecycleConfiguration")
     final case object SetBucketLifecycleConfiguration extends S3Action("s3:PutLifecycleConfiguration")
   }
+
+  private def decodeSet[A](c: HCursor, field: String)(implicit ev: Decoder[Set[A]]): Decoder.Result[Set[A]] =
+    c.downField(field).success.toList.flatTraverse(_.as[Set[A]].map(_.toList)).map(_.toSet)
 }

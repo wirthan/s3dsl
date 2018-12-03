@@ -38,8 +38,12 @@ object Gens {
 
   implicit lazy val conditionArb = Arbitrary(conditionGen)
 
-  implicit lazy val statementArb = implicitly[Arbitrary[Statement]]
+  implicit lazy val statementWriteArb = implicitly[Arbitrary[StatementWrite]]
 
-  implicit lazy val policyArb = implicitly[Arbitrary[Policy]]
+  implicit lazy val statementReadArb = implicitly[Arbitrary[StatementRead]]
+
+  implicit lazy val policyWriteArb = implicitly[Arbitrary[PolicyWrite]]
+
+  implicit lazy val policyReadArb = implicitly[Arbitrary[PolicyRead]]
 
 }
