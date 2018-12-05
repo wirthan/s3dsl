@@ -25,7 +25,7 @@ object Dsl {
     def listBuckets: F[List[BucketName]]
 
     def getBucketAcl(name: BucketName): F[Option[AccessControlList]]
-
+    
     def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
     def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
     def doesObjectExist(path: Path): F[Boolean]

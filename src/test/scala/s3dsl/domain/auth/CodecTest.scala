@@ -1,7 +1,6 @@
 package s3dsl.domain.auth
 
 import java.io.File
-
 import s3dsl.domain.Gens._
 import enumeratum.scalacheck.arbEnumEntry
 import io.circe.Json
@@ -11,11 +10,9 @@ import io.circe.literal._
 import io.circe.parser.decode
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-
 import scala.io.Source
 
-// TODO: Some of the json values can either be a String or an Array
-// Examples: https://gist.github.com/magnetikonline/6215d9e80021c1f8de12
+
 object CodecTest extends Specification with ScalaCheck {
 
   "Action codec" should {
@@ -47,25 +44,29 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Set[Principal] codec" should {
     import Principal._
-    val exampleJson = """
+
+    "decode an example json" in {
+      val json = json"""
           {
             "AWS": [
           	  "arn:aws:iam::ACCOUNT_ID:user/USERNAME_A",
           		"arn:aws:iam::ACCOUNT_ID:user/USERNAME_B"
           		]
           }"""
+      json.as[Set[Principal]] should beRight { p: Set[Principal] => p should haveSize(2) }
+    }
 
-    "decode an example json" in {
-      decode[Set[Principal]](exampleJson) should beRight { p: Set[Principal] =>
-        p should haveSize(2)
-      }
+    "decode string and array values" in {
+      val json = json"""{
+                    "AWS": "*",
+                     "Arr": ["a", "b"]
+                     }"""
+      json.as[Set[Principal]] should beRight { p: Set[Principal] => p should haveSize(3) }
     }
 
     "be reversible" in {
       prop {p: Set[Principal] =>
-        p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] =>
-          p2 should containAllOf(p.toList)
-        }
+        p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] => p2 should containAllOf(p.toList) }
       }.set(maxSize = 20)
     }
   }
@@ -153,36 +154,58 @@ object CodecTest extends Specification with ScalaCheck {
     }
   }
 
-  "PolicyWrite codec" should {
+  "Version codec" should {
     "be reversible" in {
-      prop {p: PolicyWrite =>
-        p.asJson.as[PolicyWrite] should beRight{ p2: PolicyWrite => p2 should be_==(p) }
+      prop {v: Policy.Version =>
+        v.asJson.as[Policy.Version] should beRight{ v2: Policy.Version => v2 should be_==(v) }
       }.set(maxSize = 20)
     }
   }
 
-  "PolicyRead codec" should {
-    "be reversible" in {
-      prop {p: PolicyRead =>
-        p.asJson.as[PolicyRead] should beRight{ p2: PolicyRead => p2 should be_==(p) }
+  "PolicyWrite encoder" should {
+    "be successful" in {
+      prop {p: PolicyWrite =>
+        p.asJson should be_!=(Json.Null)
       }.set(maxSize = 20)
     }
+  }
 
-    "decode minimal json" in {
-      json"""{ "Version": "2012-10-17"}""".as[PolicyRead].map(_.version) should beRight(Policy.Version("2012-10-17"))
+  "PolicyRead decoder" should {
+
+    "decode a simple example" in {
+      val json = json"""{
+                         "Version": "2012-10-17",
+                         "Statement": [
+                           {
+                             "Action": [
+                               "s3:GetObject"
+                             ],
+                             "Effect": "Allow",
+                             "Principal": {
+                               "AWS": [
+                                 "*"
+                               ]
+                             },
+                             "Resource": [
+                               "arn:aws:s3:::BUCKET_NAME/*"
+                             ]
+                           }
+                         ]
+                       }"""
+
+      json.as[PolicyRead] should beRight
     }
-    
+
     "be able to decode a set of examples" in {
       loadFiles("src/test/resources/authpolicies/", "json").map { s =>
-        Json.fromString(s).as[PolicyRead] should beRight
+        io.circe.parser.parse(s).map(_.as[PolicyRead]) should beRight
       }
     }
   }
 
   def loadFiles(path: String, ext: String) = new File(path)
-    .listFiles
+    .listFiles.toList
     .filter(_.getName.endsWith(s".$ext"))
-    .map(f => Source.fromFile(f).mkString.trim)
-    .toList
+    .map(f => Source.fromFile(f).mkString)
 
 }

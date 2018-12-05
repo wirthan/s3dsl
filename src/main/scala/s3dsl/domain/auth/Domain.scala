@@ -3,7 +3,7 @@ package s3dsl.domain.auth
 import cats.data.NonEmptyMap
 import cats.{Eq, Order}
 import cats.implicits._
-import cats.implicits.catsKernelStdOrderForTuple2
+import mouse.boolean._
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
 import io.circe.syntax._
@@ -15,6 +15,9 @@ import io.estatico.newtype.macros.newtype
   "org.wartremover.warts.ImplicitParameter"))
 object Domain {
   // "Principal" has permission to do "Action" to "Resource" where "Condition" applies.
+
+  private implicit def decodeValueOrArray[T](implicit tDec: Decoder[T]): Decoder[List[T]] = (c: HCursor) =>
+    c.value.isArray.fold(c.value, Json.arr(c.value)).as[List[T]](Decoder.decodeList[T])
 
   //
   // Policy
@@ -42,8 +45,6 @@ object Domain {
     implicit lazy val encoder: Encoder[PolicyWrite] =
       Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
 
-    implicit private[s3dsl] lazy val decoder: Decoder[PolicyWrite] =
-      Decoder.forProduct3("Id", "Version", "Statement")(PolicyWrite.apply)
   }
 
   final case class PolicyRead(id: Option[String],
@@ -53,13 +54,12 @@ object Domain {
   object PolicyRead {
     implicit lazy val eq: Eq[PolicyRead] = Eq.fromUniversalEquals[PolicyRead]
 
-    implicit lazy val decoder: Decoder[PolicyRead] =
-      Decoder.forProduct3[PolicyRead, Option[String], Policy.Version, List[StatementRead]](
-      "Id", "Version", "Statement"
-    )((id, version, statement) => PolicyRead(id, version, statement))
+    implicit lazy val decoder: Decoder[PolicyRead] = (c: HCursor) => for {
+      id <- c.downField("Id").success.flatTraverse(_.as[Option[String]])
+      version <- c.downField("Version").as[Policy.Version]
+      statements <- c.downField("Statement").as[List[StatementRead]]
+    } yield PolicyRead(id, version, statements)
 
-    implicit private[s3dsl] lazy val encoder: Encoder[PolicyRead] =
-      Encoder.forProduct3("Id", "Version", "Statement")(p => (p.id, p.version, p.statements))
   }
 
 
