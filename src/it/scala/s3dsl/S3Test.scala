@@ -19,6 +19,9 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 import cats.syntax.all._
 import cats.instances.all._
+import s3dsl.domain.auth.Domain
+import s3dsl.domain.auth.Domain.Principal.Provider
+import s3dsl.domain.auth.Domain.{Policy, PolicyRead, PolicyWrite, Principal, Resource, S3Action, StatementWrite}
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.IO
@@ -32,7 +35,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = interpreter(config)(IO.ioConcurrentEffect(cs), cs)
+  private val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
   private implicit val par = IO.ioParallel(cs)
 
   "Bucket" in {
@@ -82,6 +85,36 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
     }
 
+    "getting and setting Bucket Policy" should { // TODO
+
+      "succeed for a simple case" in {
+        prop { bn: BucketName =>
+          val policyWrite = PolicyWrite(
+            id = Some("1"),
+            version = Policy.Version.defaultVersion,
+            statements = List(
+              StatementWrite(
+                id = "1",
+                effect = Domain.Effect.Allow,
+                principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
+                actions = Set(S3Action.GetObject),
+                resources = Set(Resource(s"arn:aws:s3:::${bn.value}/*")),
+                conditions = Set()
+              )
+            )
+          )
+
+          val prog: TestProg[Option[PolicyRead]] = bucketPath => for {
+            _ <- s3.setBucketPolicy(bn, policyWrite)
+            policyRead <- s3.getBucketPolicy(bucketPath.bucket)
+          } yield policyRead
+
+          withBucket(bn, prog) should returnValue{ policy: Option[PolicyRead] =>
+            policy should beSome
+          }
+        }
+      }.set(minTestsOk = 3, maxSize = 8)
+    }
   }
 
   "Object" in {
@@ -215,8 +248,11 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
   private def withBucket[X](f: TestProg[X]): IO[X] = for {
     bucketPath <- bucketName.map(Path(_, Key.empty))
-    x <- s3.createBucket(bucketPath.bucket).bracket(_ => f(bucketPath))(_ => s3.deleteBucket(bucketPath.bucket))
+    x <- withBucket(bucketPath.bucket, f)
   } yield x
+
+  private def withBucket[X](bn: BucketName, f: TestProg[X]): IO[X] =
+    s3.createBucket(bn).bracket(_ => f(Path(bn, Key.empty)))(_ => s3.deleteBucket(bn))
 
   private def bucketName = IO(
     BucketName.validate(s"test-${System.currentTimeMillis}-${Random.nextInt(9999999).toString}")

@@ -26,7 +26,7 @@ val config = S3Config(
 )
 
 val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-val s3 = interpreter(config)(IO.ioConcurrentEffect(cs), cs)
+val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
 ```
 
 ### Use the interpreter

@@ -9,6 +9,7 @@ import io.circe._
 import io.circe.syntax._
 import io.estatico.newtype.macros.newtype
 
+// TODO: Improve typesafety
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
   "org.wartremover.warts.ImplicitConversion",

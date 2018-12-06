@@ -14,18 +14,21 @@ import cats.instances.all._
 import cats.syntax.all._
 import mouse.all._
 import cats.effect.{ConcurrentEffect, ContextShift, Sync}
+import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 
 object Dsl {
 
   trait S3Dsl[F[_]] {
 
-    def createBucket(name: BucketName): F[Unit]
-    def deleteBucket(name: BucketName): F[Unit]
-    def doesBucketExist(name: BucketName): F[Boolean]
+    def createBucket(bucket: BucketName): F[Unit]
+    def deleteBucket(bucket: BucketName): F[Unit]
+    def doesBucketExist(bucket: BucketName): F[Boolean]
     def listBuckets: F[List[BucketName]]
 
-    def getBucketAcl(name: BucketName): F[Option[AccessControlList]]
-    
+    def getBucketAcl(bucket: BucketName): F[Option[AccessControlList]]
+    def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
+    def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
+
     def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
     def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
     def doesObjectExist(path: Path): F[Boolean]
@@ -40,12 +43,13 @@ object Dsl {
     import scala.concurrent.ExecutionContext
     import collection.JavaConverters._
     import java.io.InputStream
+    import io.circe.syntax._
 
     final case class S3Config(creds: AWSCredentials,
                               endpoint: EndpointConfiguration,
                               blockingEc: ExecutionContext)
 
-    def interpreter[F[_]](config: S3Config)(implicit F: ConcurrentEffect[F], cs: ContextShift[F]): S3Dsl[F] = {
+    def interpreter[F[_]](config: S3Config, cs: ContextShift[F])(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
 
       val s3 = createAwsS3Client(config)
       val blockingEc = config.blockingEc
@@ -119,6 +123,22 @@ object Dsl {
         }
 
         //
+        // Bucket Policy
+        //
+
+        override def getBucketPolicy(name: BucketName): F[Option[PolicyRead]] = {
+          import io.circe.parser.parse
+          F.blocking(s3.getBucketPolicy(name.value)).map(aws =>
+            Option(aws.getPolicyText)
+              .map(s => parse(s).flatMap(_.as[PolicyRead]))
+              .map(e => e.fold(l => sys.error(l.getMessage), identity))
+          )
+        }
+
+        override def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit] =
+          F.blocking(s3.setBucketPolicy(bucket.value, policy.asJson.noSpaces))
+
+        //
         // Object
         //
 
@@ -127,7 +147,7 @@ object Dsl {
           obj <- s3object.traverse { o =>
             val isT: F[InputStream] = F.blocking(o.getObjectContent)
             F.delay(Object[F](
-              stream = fs2.io.readInputStream[F](isT, chunkSize, blockingEc, closeAfterUse = true),
+              stream = fs2.io.readInputStream[F](isT, chunkSize, blockingEc, closeAfterUse = true)(F, cs),
               meta = toMeta(o.getObjectMetadata))
             )
           }
