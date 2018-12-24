@@ -21,7 +21,7 @@ import cats.syntax.all._
 import cats.instances.all._
 import s3dsl.domain.auth.Domain
 import s3dsl.domain.auth.Domain.Principal.Provider
-import s3dsl.domain.auth.Domain.{Policy, PolicyRead, PolicyWrite, Principal, Resource, S3Action, StatementWrite}
+import s3dsl.domain.auth.Domain._
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.IO
@@ -85,7 +85,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
     }
 
-    "getting and setting Bucket Policy" should { // TODO
+    "getting and setting Bucket Policy" should {
 
       "succeed for a simple case" in {
         prop { bn: BucketName =>
@@ -105,7 +105,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           )
 
           val prog: TestProg[Option[PolicyRead]] = bucketPath => for {
-            _ <- s3.setBucketPolicy(bn, policyWrite)
+            _ <- s3.setBucketPolicy(bucketPath.bucket, policyWrite)
             policyRead <- s3.getBucketPolicy(bucketPath.bucket)
           } yield policyRead
 

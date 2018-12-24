@@ -135,8 +135,10 @@ object Dsl {
           )
         }
 
-        override def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit] =
+        override def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit] = {
+          println(policy.asJson.noSpaces)
           F.blocking(s3.setBucketPolicy(bucket.value, policy.asJson.noSpaces))
+        }
 
         //
         // Object

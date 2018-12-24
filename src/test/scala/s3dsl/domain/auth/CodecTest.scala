@@ -1,6 +1,7 @@
 package s3dsl.domain.auth
 
 import java.io.File
+
 import s3dsl.domain.Gens._
 import enumeratum.scalacheck.arbEnumEntry
 import io.circe.Json
@@ -10,6 +11,8 @@ import io.circe.literal._
 import io.circe.parser.decode
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
+import s3dsl.domain.auth.Domain.Principal.Provider
+
 import scala.io.Source
 
 
@@ -163,11 +166,49 @@ object CodecTest extends Specification with ScalaCheck {
   }
 
   "PolicyWrite encoder" should {
+
     "be successful" in {
       prop {p: PolicyWrite =>
         p.asJson should be_!=(Json.Null)
       }.set(maxSize = 20)
     }
+
+    "encode a simple example correctly" in {
+      val json = json"""{
+                         "Id": "1",
+                         "Version": "2012-10-17",
+                         "Statement": [
+                           {
+                             "Sid": "1",
+                             "Action": ["s3:GetObject"],
+                             "Effect": "Allow",
+                             "Principal": {
+                               "AWS": ["*"]
+                             },
+                             "Resource": ["arn:aws:s3:::BUCKET_NAME/*"],
+                             "Condition": {}
+                           }
+                         ]
+                       }"""
+
+      val policyWrite = PolicyWrite(
+        id = Some("1"),
+        version = Policy.Version.defaultVersion,
+        statements = List(
+          StatementWrite(
+            id = "1",
+            effect = Domain.Effect.Allow,
+            principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
+            actions = Set(S3Action.GetObject),
+            resources = Set(Resource(s"arn:aws:s3:::BUCKET_NAME/*")),
+            conditions = Set()
+          )
+        )
+      )
+
+      policyWrite.asJson must be_==(json)
+    }
+
   }
 
   "PolicyRead decoder" should {
