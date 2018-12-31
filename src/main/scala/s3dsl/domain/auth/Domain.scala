@@ -91,8 +91,15 @@ object Domain {
       s.asJson(encoder)
     }
 
-    private[s3dsl] implicit lazy val decoder: Decoder[StatementWrite] =
-      Decoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(StatementWrite.apply)
+    private[s3dsl] implicit lazy val decoder: Decoder[StatementWrite] = (c: HCursor) => for {
+      id <- c.downField("Sid").as[String]
+      effect <- c.downField("Effect").as[Effect]
+      principals <- decodeSet[Principal](c, "Principal")
+      actions <- decodeSet[S3Action](c, "Action")
+      resources <- decodeSet[Resource](c, "Resource")
+      conditions <- decodeSet[Condition](c, "Condition")
+    } yield StatementWrite(id, effect, principals, actions, resources, conditions)
+
   }
 
   final case class StatementRead(id: Option[String],

@@ -185,8 +185,7 @@ object CodecTest extends Specification with ScalaCheck {
                              "Principal": {
                                "AWS": ["*"]
                              },
-                             "Resource": ["arn:aws:s3:::BUCKET_NAME/*"],
-                             "Condition": {}
+                             "Resource": ["arn:aws:s3:::BUCKET_NAME/*"]
                            }
                          ]
                        }"""

@@ -3,7 +3,7 @@ package s3dsl
 import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 
-import Dsl.S3Dsl._
+import S3Dsl._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
 import enumeratum.scalacheck._
@@ -75,7 +75,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             acl should beSome
           }
         }
-      }.set(minTestsOk = 5, maxSize = 8)
+      }.set(maxSize = 8)
 
       "return None if bucket does not exist" in {
         prop { bn: BucketName =>
@@ -121,7 +121,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             policy should beSome
           }
         }
-      }.set(minTestsOk = 3, maxSize = 8)
+      }.set(maxSize = 8)
     }
   }
 
@@ -143,7 +143,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
           withBucket(prog) should returnValue((true, false))
         }
-      }.set(minTestsOk = 3, maxSize = 5).setGen2(Gens.blobGen)
+      }.set(maxSize = 5).setGen2(Gens.blobGen)
 
     }
 
@@ -167,6 +167,27 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         }
       }
 
+    }
+
+    "copy object" should {
+
+      "succeed" in {
+        prop { (src: Key, dest: Key, blob: String) =>
+          val prog: TestProg[(Boolean, Boolean)] = bucketPath => {
+            val bytes = blob.getBytes
+            val srcPath = Path(bucketPath.bucket, src)
+            val destPath = Path(bucketPath.bucket, dest)
+            for {
+              _ <- Stream.emits(bytes).covary[IO].to(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- s3.copyObject(srcPath, destPath)
+              srcExists <- s3.doesObjectExist(srcPath)
+              destExists <- s3.doesObjectExist(destPath)
+              _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
+            } yield (srcExists, destExists)
+          }
+          withBucket(prog) should returnValue((true, true))
+        }.set(maxSize = 5).setGen3(Gens.blobGen)
+      }
     }
 
     "getObject" should {
@@ -204,7 +225,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield obj
 
           withBucket(prog) should returnValue(None)
-        }.set(minTestsOk = 3, maxSize = 5)
+        }.set(maxSize = 5)
       }
 
     }
@@ -236,7 +257,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield meta
 
           withBucket(prog) should returnValue(None)
-        }.set(minTestsOk = 3, maxSize = 5)
+        }.set(maxSize = 5)
       }
     }
 

@@ -16,7 +16,7 @@ If you're using SBT, add the following line to your build file:
 s3dsl provides a function that returns a [cats-effect](https://github.com/typelevel/cats-effect) interpreter:
 
 ```scala
-import s3dsl.Dsl.S3Dsl._
+import s3dsl.S3Dsl._
 import s3dsl.domain.S3._
 
 val config = S3Config(
