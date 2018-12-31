@@ -97,6 +97,14 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
                 id = "1",
                 effect = Domain.Effect.Allow,
                 principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
+                actions = Set(S3Action.GetBucketLocation, S3Action.ListObjects),
+                resources = Set(Resource(s"arn:aws:s3:::${bn.value}")),
+                conditions = Set()
+              ),
+              StatementWrite(
+                id = "2",
+                effect = Domain.Effect.Allow,
+                principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
                 actions = Set(S3Action.GetObject),
                 resources = Set(Resource(s"arn:aws:s3:::${bn.value}/*")),
                 conditions = Set()

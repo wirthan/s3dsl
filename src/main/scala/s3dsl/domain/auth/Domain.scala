@@ -9,7 +9,6 @@ import io.circe._
 import io.circe.syntax._
 import io.estatico.newtype.macros.newtype
 
-// TODO: Improve typesafety
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
   "org.wartremover.warts.ImplicitConversion",
@@ -17,7 +16,7 @@ import io.estatico.newtype.macros.newtype
 object Domain {
   // "Principal" has permission to do "Action" to "Resource" where "Condition" applies.
 
-  private implicit def decodeValueOrArray[T](implicit tDec: Decoder[T]): Decoder[List[T]] = (c: HCursor) =>
+  private implicit def decodeValueOrArray[T](implicit ev: Decoder[T]): Decoder[List[T]] = (c: HCursor) =>
     c.value.isArray.fold(c.value, Json.arr(c.value)).as[List[T]](Decoder.decodeList[T])
 
   //
@@ -80,9 +79,17 @@ object Domain {
 
     implicit lazy val order: Order[StatementWrite] = Order.by(_.id)
 
-    implicit lazy val encoder: Encoder[StatementWrite] =
-      Encoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(s =>
-        (s.id, s.effect, s.principals, s.actions, s.resources, s.conditions))
+    implicit lazy val encoder: Encoder[StatementWrite] = Encoder.instance[StatementWrite]{s =>
+      val encoder: Encoder[StatementWrite] = s.conditions.isEmpty.fold(
+        Encoder.forProduct5("Sid", "Effect", "Principal", "Action", "Resource")(s =>
+          (s.id, s.effect, s.principals, s.actions, s.resources)
+        ),
+        Encoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(s =>
+          (s.id, s.effect, s.principals, s.actions, s.resources, s.conditions)
+        )
+      )
+      s.asJson(encoder)
+    }
 
     private[s3dsl] implicit lazy val decoder: Decoder[StatementWrite] =
       Decoder.forProduct6("Sid", "Effect", "Principal", "Action", "Resource", "Condition")(StatementWrite.apply)
