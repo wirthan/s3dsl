@@ -2,18 +2,18 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.4.0"
-val catsEffectVersion = "1.0.0"
-val mouseVersion      = "0.19"
+val catsVersion       = "1.5.0"
+val catsEffectVersion = "1.1.0"
+val mouseVersion      = "0.20"
 val circeVersion      = "0.10.1"
-val fs2Version        = "1.0.0"
+val fs2Version        = "1.0.2"
 val refinedVersion    = "0.9.3"
 val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.4"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.441"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.475"
 
 val refined = Seq(
   "eu.timepit" %% "refined",

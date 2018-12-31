@@ -190,7 +190,7 @@ object S3Dsl {
 
       override def copyObject(src: Path, dest: Path): F[Unit] = F.blocking(
         s3.copyObject(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value)
-      )
+      ).void
 
       override def deleteObject(path: Path): F[Unit] = F.blocking(s3.deleteObject(path.bucket.value, path.key.value))
 
