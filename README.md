@@ -7,7 +7,7 @@ Minimal, stream based S3 DSL. Depends on [aws-java-sdk-s3](https://github.com/aw
 ## Getting s3dsl
 If you're using SBT, add the following line to your build file:
 
-    libraryDependencies += "com.github.wirthan" % "s3dsl_2.12" % <version>
+    libraryDependencies += "com.github.wirthan" %% "s3dsl" % <version>
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ If you're using SBT, add the following line to your build file:
 s3dsl provides a function that returns a [cats-effect](https://github.com/typelevel/cats-effect) interpreter:
 
 ```scala
-import s3dsl.Dsl.S3Dsl._
+import s3dsl.S3Dsl._
 import s3dsl.domain.S3._
 
 val config = S3Config(
@@ -26,7 +26,7 @@ val config = S3Config(
 )
 
 val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-val s3 = interpreter(config)(IO.ioConcurrentEffect(cs), cs)
+val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
 ```
 
 ### Use the interpreter

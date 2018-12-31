@@ -3,7 +3,7 @@ package s3dsl
 import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 
-import Dsl.S3Dsl._
+import S3Dsl._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
 import enumeratum.scalacheck._
@@ -19,6 +19,9 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 import cats.syntax.all._
 import cats.instances.all._
+import s3dsl.domain.auth.Domain
+import s3dsl.domain.auth.Domain.Principal.Provider
+import s3dsl.domain.auth.Domain._
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.IO
@@ -32,7 +35,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = interpreter(config)(IO.ioConcurrentEffect(cs), cs)
+  private val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
   private implicit val par = IO.ioParallel(cs)
 
   "Bucket" in {
@@ -58,6 +61,68 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
     }
 
+    "getBucketAcl" should {
+
+      "return Some if bucket exists" in {
+        prop { bn: BucketName =>
+          val prog = for {
+            _ <- s3.createBucket(bn)
+            acl <- s3.getBucketAcl(bn)
+            _ <- s3.deleteBucket(bn)
+          } yield acl
+
+          prog should returnValue{ acl: Option[AccessControlList] =>
+            acl should beSome
+          }
+        }
+      }.set(maxSize = 8)
+
+      "return None if bucket does not exist" in {
+        prop { bn: BucketName =>
+          s3.getBucketAcl(bn) should returnValue(None)
+        }
+      }
+
+    }
+
+    "getting and setting Bucket Policy" should {
+
+      "succeed for a simple case" in {
+        prop { bn: BucketName =>
+          val policyWrite = PolicyWrite(
+            id = Some("1"),
+            version = Policy.Version.defaultVersion,
+            statements = List(
+              StatementWrite(
+                id = "1",
+                effect = Domain.Effect.Allow,
+                principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
+                actions = Set(S3Action.GetBucketLocation, S3Action.ListObjects),
+                resources = Set(Resource(s"arn:aws:s3:::${bn.value}")),
+                conditions = Set()
+              ),
+              StatementWrite(
+                id = "2",
+                effect = Domain.Effect.Allow,
+                principals = Set(Principal(Provider("AWS"), Principal.Id("*"))),
+                actions = Set(S3Action.GetObject),
+                resources = Set(Resource(s"arn:aws:s3:::${bn.value}/*")),
+                conditions = Set()
+              )
+            )
+          )
+
+          val prog: TestProg[Option[PolicyRead]] = bucketPath => for {
+            _ <- s3.setBucketPolicy(bucketPath.bucket, policyWrite)
+            policyRead <- s3.getBucketPolicy(bucketPath.bucket)
+          } yield policyRead
+
+          withBucket(bn, prog) should returnValue{ policy: Option[PolicyRead] =>
+            policy should beSome
+          }
+        }
+      }.set(maxSize = 8)
+    }
   }
 
   "Object" in {
@@ -78,7 +143,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
           withBucket(prog) should returnValue((true, false))
         }
-      }.set(minTestsOk = 3, maxSize = 5).setGen2(Gens.blobGen)
+      }.set(maxSize = 5).setGen2(Gens.blobGen)
 
     }
 
@@ -102,6 +167,27 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         }
       }
 
+    }
+
+    "copy object" should {
+
+      "succeed" in {
+        prop { (src: Key, dest: Key, blob: String) =>
+          val prog: TestProg[(Boolean, Boolean)] = bucketPath => {
+            val bytes = blob.getBytes
+            val srcPath = Path(bucketPath.bucket, src)
+            val destPath = Path(bucketPath.bucket, dest)
+            for {
+              _ <- Stream.emits(bytes).covary[IO].to(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- s3.copyObject(srcPath, destPath)
+              srcExists <- s3.doesObjectExist(srcPath)
+              destExists <- s3.doesObjectExist(destPath)
+              _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
+            } yield (srcExists, destExists)
+          }
+          withBucket(prog) should returnValue((true, true))
+        }.set(maxSize = 5).setGen3(Gens.blobGen)
+      }
     }
 
     "getObject" should {
@@ -139,7 +225,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield obj
 
           withBucket(prog) should returnValue(None)
-        }.set(minTestsOk = 3, maxSize = 5)
+        }.set(maxSize = 5)
       }
 
     }
@@ -171,7 +257,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield meta
 
           withBucket(prog) should returnValue(None)
-        }.set(minTestsOk = 3, maxSize = 5)
+        }.set(maxSize = 5)
       }
     }
 
@@ -191,8 +277,11 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
   private def withBucket[X](f: TestProg[X]): IO[X] = for {
     bucketPath <- bucketName.map(Path(_, Key.empty))
-    x <- s3.createBucket(bucketPath.bucket).bracket(_ => f(bucketPath))(_ => s3.deleteBucket(bucketPath.bucket))
+    x <- withBucket(bucketPath.bucket, f)
   } yield x
+
+  private def withBucket[X](bn: BucketName, f: TestProg[X]): IO[X] =
+    s3.createBucket(bn).bracket(_ => f(Path(bn, Key.empty)))(_ => s3.deleteBucket(bn))
 
   private def bucketName = IO(
     BucketName.validate(s"test-${System.currentTimeMillis}-${Random.nextInt(9999999).toString}")

@@ -2,27 +2,28 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.4.0"
-val catsEffectVersion = "1.0.0"
-val mouseVersion      = "0.19"
-val fs2Version        = "1.0.0"
+val catsVersion       = "1.5.0"
+val catsEffectVersion = "1.1.0"
+val mouseVersion      = "0.20"
+val circeVersion      = "0.10.1"
+val fs2Version        = "1.0.2"
 val refinedVersion    = "0.9.3"
 val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.4"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.441"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.475"
 
 val refined = Seq(
-  "eu.timepit" %% "refined"            % refinedVersion,
-  "eu.timepit" %% "refined-cats"       % refinedVersion
-)
+  "eu.timepit" %% "refined",
+  "eu.timepit" %% "refined-cats"
+).map(_ % refinedVersion)
 
 val fs2 = Seq(
-  "co.fs2" %% "fs2-core" % fs2Version,
-  "co.fs2" %% "fs2-io"   % fs2Version
-)
+  "co.fs2" %% "fs2-core",
+  "co.fs2" %% "fs2-io"
+).map(_ % fs2Version)
 
 val cats = Seq(
   "org.typelevel" %% "cats-core"   % catsVersion,
@@ -30,13 +31,24 @@ val cats = Seq(
   "org.typelevel" %% "mouse"       % mouseVersion,
 )
 
+val circe = Seq(
+  "io.circe"     %% "circe-core"           % circeVersion,
+  "io.circe"     %% "circe-generic"        % circeVersion,
+  "io.circe"     %% "circe-generic-extras" % circeVersion,
+  "io.circe"     %% "circe-parser"         % circeVersion,
+  "io.circe"     %% "circe-refined"        % circeVersion,
+  "com.beachape" %% "enumeratum-circe"     % "1.5.18"
+)
+
 val testDeps = Seq(
-  "org.specs2"        %% "specs2-core"           % specs2Version,
-  "org.specs2"        %% "specs2-scalacheck"     % specs2Version,
-  "org.specs2"        %% "specs2-cats"           % specs2Version,
-  "eu.timepit"        %% "refined-scalacheck"    % refinedVersion,
-  "io.chrisdavenport" %% "cats-scalacheck"       % "0.1.0",
-  "com.beachape"      %% "enumeratum-scalacheck" % enumeratumVersion
+  "org.specs2"                 %% "specs2-core"               % specs2Version,
+  "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
+  "org.specs2"                 %% "specs2-cats"               % specs2Version,
+  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
+  "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
+  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
+  "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
+  "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")
 
 lazy val wartsInTest = Warts.allBut(
@@ -69,7 +81,8 @@ lazy val projectSettings = Seq(
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
 )
 
 lazy val s3dsl = project.in(file("."))
@@ -77,7 +90,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //

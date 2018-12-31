@@ -1,11 +1,11 @@
 package s3dsl.domain
 
 import java.util.Date
-
 import eu.timepit.refined.api._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
 import com.amazonaws.{HttpMethod => AwsHttpMethod}
+import com.amazonaws.services.s3.model.{Permission => AwsPermission}
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{Enum, EnumEntry}
 
@@ -63,6 +63,60 @@ object S3 {
 
 
   //
+  // Access control
+  //
+
+  final case class Owner(id: Owner.Id, displayName: Owner.DisplayName)
+
+  object Owner {
+    @newtype final case class Id(value: String)
+    @newtype final case class DisplayName(value: String)
+  }
+
+  final case class Grantee(identifier: Grantee.Identifier, typeIdentifier: Grantee.TypeIdentifier)
+
+  object Grantee {
+    @newtype final case class Identifier(value: String)
+    @newtype final case class TypeIdentifier(value: String)
+  }
+
+  sealed trait Permission extends EnumEntry {
+    import s3dsl.domain.S3.Permission._
+
+    private[s3dsl] lazy val aws: AwsPermission = fold(
+      fullControl = AwsPermission.FullControl,
+      read = AwsPermission.Read,
+      readAcp = AwsPermission.ReadAcp,
+      write = AwsPermission.Write,
+      writeAcp = AwsPermission.WriteAcp
+    )
+
+    def fold[X](fullControl: => X, read: => X, readAcp: => X, write: => X, writeAcp: => X): X = this match {
+      case FullControl => fullControl
+      case Read => read
+      case ReadAcp => readAcp
+      case Write => write
+      case WriteAcp => writeAcp
+    }
+
+  }
+
+  object Permission extends Enum[Permission] {
+    lazy val values = findValues
+
+    final case object FullControl extends Permission
+    final case object Read extends Permission
+    final case object ReadAcp extends Permission
+    final case object Write extends Permission
+    final case object WriteAcp extends Permission
+  }
+
+  final case class Grant(grantee: Grantee, permission: Permission)
+
+  final case class AccessControlList(grants: List[Grant], owner: Owner)
+
+
+  //
   // HTTP Method
   //
 
@@ -85,7 +139,7 @@ object S3 {
   }
 
   object HTTPMethod extends Enum[HTTPMethod] {
-    val values = findValues
+    lazy val values = findValues
 
     final case object DELETE extends HTTPMethod with Uppercase
     final case object GET extends HTTPMethod with Uppercase
