@@ -5,15 +5,15 @@ name := "s3dsl"
 val catsVersion       = "1.5.0"
 val catsEffectVersion = "1.1.0"
 val mouseVersion      = "0.20"
-val circeVersion      = "0.10.1"
+val circeVersion      = "0.11.1"
 val fs2Version        = "1.0.2"
-val refinedVersion    = "0.9.3"
+val refinedVersion    = "0.9.4"
 val enumeratumVersion = "1.5.13"
-val specs2Version     = "4.3.4"
+val specs2Version     = "4.3.6"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.475"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.485"
 
 val refined = Seq(
   "eu.timepit" %% "refined",
@@ -37,7 +37,7 @@ val circe = Seq(
   "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
   "io.circe"     %% "circe-refined"        % circeVersion,
-  "com.beachape" %% "enumeratum-circe"     % "1.5.18"
+  "com.beachape" %% "enumeratum-circe"     % "1.5.19"
 )
 
 val testDeps = Seq(
@@ -60,7 +60,7 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  scalaVersion := "2.12.7",
+  scalaVersion := "2.12.8",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
     "-Xsource:2.13",
@@ -82,7 +82,7 @@ lazy val projectSettings = Seq(
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
-  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
+  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9")
 )
 
 lazy val s3dsl = project.in(file("."))
