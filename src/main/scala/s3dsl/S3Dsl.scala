@@ -3,14 +3,13 @@ package s3dsl
 import java.time.ZonedDateTime
 
 import s3dsl.domain.S3._
-import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import eu.timepit.refined.cats.syntax._
 import fs2.{Sink, Stream}
-import cats.instances.all._
-import cats.syntax.all._
+import cats.implicits._
 import mouse.all._
 import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
@@ -44,6 +43,7 @@ object S3Dsl {
   import java.io.InputStream
   import io.circe.syntax._
 
+
   final case class S3Config(creds: AWSCredentials,
                             endpoint: EndpointConfiguration,
                             blockingEc: ExecutionContext)
@@ -55,15 +55,6 @@ object S3Dsl {
 
     implicit class SyncSyntax(val sync: Sync[F]) {
       def blocking[A](fa: => A): F[A] = cs.evalOn(blockingEc)(sync.delay(fa))
-    }
-
-    implicit class OptionFSyntax[A](val f: F[Option[A]]) {
-      def handle404: F[Option[A]] = f.recoverWith{ case e: AmazonS3Exception =>
-        e.getStatusCode match {
-          case 404 => F.pure(None)
-          case _ => F.raiseError(e)
-        }
-      }
     }
 
     new S3Dsl[F] {
@@ -118,7 +109,7 @@ object S3Dsl {
           AccessControlList(grants, owner)
         }
 
-        F.blocking(Option(s3.getBucketAcl(name.value)).map(fromAws)).handle404
+        F.blocking(Option(s3.getBucketAcl(name.value)).map(fromAws)).handle404(None)
       }
 
       //
@@ -142,7 +133,7 @@ object S3Dsl {
       //
 
       override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = for {
-        s3object <- F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404
+        s3object <- F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
         obj <- s3object.traverse { o =>
           val isT: F[InputStream] = F.blocking(o.getObjectContent)
           F.delay(Object[F](
@@ -154,7 +145,7 @@ object S3Dsl {
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
-      ).handle404
+      ).handle404(None)
 
       override def doesObjectExist(path: Path): F[Boolean] = F.blocking(
         s3.doesObjectExist(path.bucket.value, path.key.value)
@@ -166,10 +157,12 @@ object S3Dsl {
           .flatMap(_.isTruncated.option(ol))
           .flatTraverse(ol => F.blocking(Option(s3.listNextBatchOfObjects(ol)).map(ol => (ol, ol)))
         )
-        val first = F.blocking(s3.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000)))
+        val first = F.blocking(
+          Option(s3.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000)))
+        ).handle404(None)
 
         Stream.eval(first)
-          .flatMap(frst => Option(frst).cata(
+          .flatMap(frst => frst.cata(
             ol => Stream.emit(ol).covary[F] ++ Stream.unfoldEval(ol)(next),
             Stream.empty.covary[F])
           )
@@ -192,7 +185,9 @@ object S3Dsl {
         s3.copyObject(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value)
       ).void
 
-      override def deleteObject(path: Path): F[Unit] = F.blocking(s3.deleteObject(path.bucket.value, path.key.value))
+      override def deleteObject(path: Path): F[Unit] = F.blocking(
+        s3.deleteObject(path.bucket.value, path.key.value)
+      ).handle404(())
 
       //
       // Presigned URL

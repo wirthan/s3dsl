@@ -29,6 +29,8 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
   val ecBlocking = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
 
   private val config = S3Config(
+    //creds = new BasicAWSCredentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"),
+    //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
     creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
     endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
     blockingEc = ecBlocking
@@ -127,6 +129,15 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
   "Object" in {
 
+    "delete" should {
+      "succeed if an object does not exist" in {
+        prop { (key: Key) =>
+          val prog: TestProg[Unit] = bucketPath => s3.deleteObject(Path(bucketPath.bucket, key))
+          withBucket(prog) should returnOk
+        }.set(maxSize = 2)
+      }
+    }
+
     "put, doesObjectExist and delete" should {
 
       "succeed" in {
@@ -165,6 +176,16 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         withBucket(prog) should returnValue{(l: List[ObjectSummary]) =>
           l.map(_.path.key) should be_==(keys)
         }
+      }
+
+      "return an empty stream for a path that does not exist" in {
+        prop { key: Key =>
+          val prog: TestProg[List[ObjectSummary]] = bucketPath =>
+            s3.listObjects(Path(bucketPath.bucket, key)).compile.toList
+          withBucket(prog) should returnValue{(l: List[ObjectSummary]) =>
+            l should beEmpty
+          }
+        }.set(maxSize = 2)
       }
 
     }

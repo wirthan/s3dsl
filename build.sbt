@@ -13,7 +13,7 @@ val specs2Version     = "4.3.6"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.485"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.489"
 
 val refined = Seq(
   "eu.timepit" %% "refined",
@@ -44,7 +44,7 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0",
+  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0-1",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
