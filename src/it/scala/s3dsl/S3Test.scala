@@ -19,6 +19,8 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 import cats.syntax.all._
 import cats.instances.all._
+import org.specs2.execute.AsResult
+import s3dsl.domain.S3.HTTPMethod.GET
 import s3dsl.domain.auth.Domain
 import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.auth.Domain._
@@ -285,13 +287,23 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "generatePresignedUrl" should {
 
       "succeed" in {
-        prop { (path: Path, expiration: ZonedDateTime, method: HTTPMethod) =>
-          s3.generatePresignedUrl(path, expiration, method) should returnOk[URL]
+        prop { (path: Path, method: HTTPMethod) =>
+          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), method) should returnOk[URL]
         }
       }
 
+      "generate a url with a positive expiration" in {
+        prop { (path: Path) =>
+          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), GET) should returnWith { x =>
+            x.value.split("X-Amz-Expires=").toList
+              .drop(1)
+              .headOption should beSome { s: String =>
+              s must startWith("86")
+            }
+          }
+        }
+      }
     }
-
   }
 
   private type TestProg[X] = Path => IO[X]
@@ -308,6 +320,8 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     BucketName.validate(s"test-${System.currentTimeMillis}-${Random.nextInt(9999999).toString}")
       .fold(_ => sys.error("err"), identity)
   )
+
+  def returnWith[T, R : AsResult](f: T => R): IOMatcher[T] = IOMatcher(f, None)
 
 }
 

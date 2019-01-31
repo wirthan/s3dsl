@@ -193,12 +193,13 @@ object S3Dsl {
       // Presigned URL
       //
 
+      // FIXME: Requests that are pre-signed by SigV4 algorithm are valid for at most 7 days
       override def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL] = F.delay(
         URL(
           s3.generatePresignedUrl(
             path.bucket.value,
             path.key.value,
-            new java.util.Date(expiration.getNano / 1000000L),
+            java.util.Date.from(expiration.toInstant),
             method.aws
           ).toString)
       )
