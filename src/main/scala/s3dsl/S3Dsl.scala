@@ -31,6 +31,7 @@ trait S3Dsl[F[_]] {
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
   def putObject(path: Path, contentLength: Long): Sink[F, Byte]
+  def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Sink[F, Byte]
   def copyObject(src: Path, dest: Path): F[Unit]
   def deleteObject(path: Path): F[Unit]
 
@@ -171,14 +172,13 @@ object S3Dsl {
       }
 
       override def putObject(path: Path, contentLength: Long): Sink[F, Byte] = { fs2In =>
+        fs2.io.toInputStream(F)(fs2In).to(FS2.liftSink(putObj(path, contentLength, Nil)))
+      }
 
-        def putObject(is: InputStream):F[Unit] = F.blocking {
-          val meta = new AwsObjectMetadata
-          meta.setContentLength(contentLength)
-          s3.putObject(path.bucket.value, path.key.value, is, meta)
-        }.void
-
-        fs2.io.toInputStream(F)(fs2In).to(FS2.liftSink(putObject))
+      override def putObjectWithHeaders(path: Path,
+                                        contentLength: Long,
+                                        headers: List[(String, String)]): Sink[F, Byte] = { fs2In =>
+        fs2.io.toInputStream(F)(fs2In).to(FS2.liftSink(putObj(path, contentLength, headers)))
       }
 
       override def copyObject(src: Path, dest: Path): F[Unit] = F.blocking(
@@ -203,6 +203,18 @@ object S3Dsl {
             method.aws
           ).toString)
       )
+
+
+      private def putObj(path: Path, contentLength: Long, headers: List[(String, String)])
+                        (is: InputStream): F[Unit] = {
+        val meta = new AwsObjectMetadata
+        meta.setContentLength(contentLength)
+
+        (for {
+          _ <- Stream.emits(headers).evalTap(t2 => F.delay(meta.setHeader(t2._1, t2._2))).compile.drain
+          _ <- F.blocking(s3.putObject(path.bucket.value, path.key.value, is, meta))
+        } yield ()).void
+      }
 
     }
   }

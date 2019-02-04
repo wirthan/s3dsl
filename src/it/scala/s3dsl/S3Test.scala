@@ -140,7 +140,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
     }
 
-    "put, doesObjectExist and delete" should {
+    "putObject, doesObjectExist and deleteObject" should {
 
       "succeed" in {
         prop { (key: Key, blob: String) =>
@@ -158,6 +158,26 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         }
       }.set(maxSize = 5).setGen2(Gens.blobGen)
 
+    }
+
+    "putObjectWithHeaders" should {
+
+      "succeed" in {
+        prop { (key: Key, blob: String) =>
+          val headers = List(("Content-Type", "text/plain"))
+
+          val prog: TestProg[Unit] = bucketPath => for {
+            path <- IO(Path(bucketPath.bucket, key))
+            bytes = blob.getBytes
+            _ <- Stream.emits(bytes).covary[IO].to(
+              s3.putObjectWithHeaders(path, bytes.length.longValue, headers)
+            ).compile.drain
+            _ <- s3.deleteObject(path)
+          } yield ()
+
+          withBucket(prog) should returnOk
+        }
+      }.set(maxSize = 3).setGen2(Gens.blobGen)
     }
 
     "listObjects" should {

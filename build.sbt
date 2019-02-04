@@ -81,8 +81,7 @@ lazy val projectSettings = Seq(
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
-  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9")
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 )
 
 lazy val s3dsl = project.in(file("."))
