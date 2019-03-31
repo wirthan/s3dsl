@@ -29,6 +29,5 @@ bin/
 .cache-tests
 .ensime*
 *.drv
-*.nix
 tags
 
