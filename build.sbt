@@ -2,11 +2,11 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.5.0"
-val catsEffectVersion = "1.1.0"
+val catsVersion       = "1.6.0"
+val catsEffectVersion = "1.2.0"
 val mouseVersion      = "0.20"
 val circeVersion      = "0.11.1"
-val fs2Version        = "1.0.2"
+val fs2Version        = "1.0.4"
 val refinedVersion    = "0.9.4"
 val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.6"
@@ -37,16 +37,16 @@ val circe = Seq(
   "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
   "io.circe"     %% "circe-refined"        % circeVersion,
-  "com.beachape" %% "enumeratum-circe"     % "1.5.19"
+  "com.beachape" %% "enumeratum-circe"     % "1.5.21"
 )
 
 val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0-1",
+  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.1",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
-  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
+  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.1",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")

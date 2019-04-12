@@ -38,7 +38,7 @@ val blob = "abc".getBytes
 // S3.Object consists of Stream[IO, Byte] and ObjectMetadata
 val obj: Option[S3.Object[IO]] = for {
   _ <- Stream.emits(blob).covary[IO]
-        .to(s3.putObject(path, blob.length.longValue))
+        .through(s3.putObject(path, blob.length.longValue))
         .compile.drain
   obj <- s3.getObject(path, 1024)      
 } yield obj
