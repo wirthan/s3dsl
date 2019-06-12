@@ -34,7 +34,6 @@ object S3 {
     override def toString: String = s"${bucket.value}/${key.value}"
   }
 
-
   //
   // Object & Object metadata
   //
@@ -53,14 +52,14 @@ object S3 {
                                   md5: Option[MD5],
                                   etag: Option[ETag],
                                   expirationTime: Option[ExpirationTime],
-                                  lastModified: Option[LastModified])
+                                  lastModified: Option[LastModified],
+                                  userMedata: Map[String, String])
 
   final case class ObjectSummary(path: Path,
                                  size: Long,
                                  etag: Option[ETag],
                                  storageClass: Option[StorageClass],
                                  lastModified: Option[LastModified])
-
 
   //
   // Access control
@@ -114,7 +113,6 @@ object S3 {
   final case class Grant(grantee: Grantee, permission: Permission)
 
   final case class AccessControlList(grants: List[Grant], owner: Owner)
-
 
   //
   // HTTP Method

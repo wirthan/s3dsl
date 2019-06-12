@@ -14,7 +14,6 @@ import mouse.all._
 import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 
-
 trait S3Dsl[F[_]] {
 
   def createBucket(bucket: BucketName): F[Unit]
@@ -242,7 +241,8 @@ object S3Dsl {
     val etag = Option(aws.getETag).map(ETag.apply)
     val expiration = Option(aws.getExpirationTime).map(ExpirationTime.apply)
     val lastModified = Option(aws.getLastModified).map(LastModified.apply)
-    ObjectMetadata(contentType, aws.getContentLength, md5, etag, expiration, lastModified)
+    val userMetadata = Option(aws.getUserMetadata.asScala.toMap).getOrElse(Map.empty[String, String])
+    ObjectMetadata(contentType, aws.getContentLength, md5, etag, expiration, lastModified, userMetadata)
   }
 
   private def createAwsS3Client(config: S3Config): AmazonS3 = {
