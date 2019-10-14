@@ -7,7 +7,7 @@ import S3Dsl._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
 import enumeratum.scalacheck._
-import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.auth.{AnonymousAWSCredentials, BasicAWSCredentials}
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import eu.timepit.refined.cats.syntax._
 import org.specs2.mutable.Specification
@@ -19,6 +19,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 import cats.syntax.all._
 import cats.instances.all._
+import com.amazonaws.services.s3.model.AmazonS3Exception
 import org.specs2.execute.AsResult
 import s3dsl.domain.S3.HTTPMethod.GET
 import s3dsl.domain.auth.Domain
@@ -127,6 +128,63 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         }
       }.set(maxSize = 8)
     }
+
+    "Accessing a bucket anonymously" should {
+
+      val anonymousConfig = S3Config(
+        creds = new AnonymousAWSCredentials,
+        endpoint = new EndpointConfiguration("s3-ch.swisstxt.ch", "us-east-1"),
+        blockingEc = ecBlocking
+      )
+
+      val anonymousS3 = interpreter(anonymousConfig, cs)(IO.ioConcurrentEffect(cs))
+
+      "result in an error for private buckets" in {
+
+        prop { bn: BucketName =>
+
+          val prog: TestProg[Either[Throwable, Unit]] = bucketPath =>
+            anonymousS3.listObjects(bucketPath).compile.drain.attempt
+
+          withBucket(bn, prog) should returnValue(
+            (_: Either[Throwable, Unit]) must beLeft.like {
+              case e: AmazonS3Exception => e.getStatusCode must_=== 403
+            }
+          )
+        }.set(maxSize = 8)
+
+      }
+
+      "succeed for public buckets" in {
+
+        prop { bn: BucketName =>
+
+          val policyWrite = PolicyWrite(
+            id = Some("1"),
+            version = Policy.Version.defaultVersion,
+            statements = List(
+              StatementWrite(
+                id = "1",
+                effect = Domain.Effect.Allow,
+                principals = Set(Principal(Provider.aws, Principal.Id.all)),
+                actions = Set(S3Action.ListObjects),
+                resources = Set(Resource(s"arn:aws:s3:::${bn.value}")),
+                conditions = Set.empty
+              )
+            )
+          )
+
+          val prog: TestProg[Unit] = bucketPath =>
+            s3.setBucketPolicy(bucketPath.bucket, policyWrite) >>
+            anonymousS3.listObjects(bucketPath).compile.drain
+
+          withBucket(bn, prog) should returnOk
+        }.set(maxSize = 8)
+
+      }
+
+    }
+
   }
 
   "Object" in {
