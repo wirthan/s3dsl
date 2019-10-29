@@ -2,18 +2,18 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.5.0"
+val catsVersion       = "1.6.1"
 val catsEffectVersion = "1.1.0"
 val mouseVersion      = "0.20"
 val circeVersion      = "0.11.1"
-val fs2Version        = "1.0.2"
+val fs2Version        = "1.0.3"
 val refinedVersion    = "0.9.4"
 val enumeratumVersion = "1.5.13"
 val specs2Version     = "4.3.6"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.489"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.661"
 
 val refined = Seq(
   "eu.timepit" %% "refined",
@@ -60,7 +60,7 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  scalaVersion := "2.12.8",
+  scalaVersion := "2.12.9",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
     "-Xsource:2.13",

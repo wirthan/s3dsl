@@ -8,7 +8,7 @@ import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import eu.timepit.refined.cats.syntax._
-import fs2.{Sink, Stream}
+import fs2.{Pipe, Stream}
 import cats.implicits._
 import mouse.all._
 import cats.effect.{ConcurrentEffect, ContextShift, Sync}
@@ -30,8 +30,8 @@ trait S3Dsl[F[_]] {
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
-  def putObject(path: Path, contentLength: Long): Sink[F, Byte]
-  def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Sink[F, Byte]
+  def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit]
+  def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
   def deleteObject(path: Path): F[Unit]
 
@@ -171,14 +171,14 @@ object S3Dsl {
           .map(toSummary)
       }
 
-      override def putObject(path: Path, contentLength: Long): Sink[F, Byte] = { fs2In =>
-        fs2.io.toInputStream(F)(fs2In).to(FS2.liftSink(putObj(path, contentLength, Nil)))
+      override def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit] = { fs2In =>
+        fs2.io.toInputStream(F)(fs2In).through(FS2.liftPipe(putObj(path, contentLength, Nil)))
       }
 
       override def putObjectWithHeaders(path: Path,
                                         contentLength: Long,
-                                        headers: List[(String, String)]): Sink[F, Byte] = { fs2In =>
-        fs2.io.toInputStream(F)(fs2In).to(FS2.liftSink(putObj(path, contentLength, headers)))
+                                        headers: List[(String, String)]): Pipe[F, Byte, Unit] = { fs2In =>
+        fs2.io.toInputStream(F)(fs2In).through(FS2.liftPipe(putObj(path, contentLength, headers)))
       }
 
       override def copyObject(src: Path, dest: Path): F[Unit] = F.blocking(
