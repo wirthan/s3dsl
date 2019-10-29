@@ -110,7 +110,7 @@ object S3Dsl {
           AccessControlList(grants, owner)
         }
 
-        F.blocking(Option(s3.getBucketAcl(name.value)).map(fromAws)).handle404(None)
+        F.blocking(s3.getBucketAcl(name.value)).map(fromAws).handle404
       }
 
       //
@@ -134,7 +134,7 @@ object S3Dsl {
       //
 
       override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = for {
-        s3object <- F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
+        s3object <- F.blocking(s3.getObject(path.bucket.value, path.key.value)).handle404
         obj <- s3object.traverse { o =>
           val isT: F[InputStream] = F.blocking(o.getObjectContent)
           F.delay(Object[F](
@@ -145,8 +145,8 @@ object S3Dsl {
       } yield obj
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
-        Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
-      ).handle404(None)
+        toMeta(s3.getObjectMetadata(path.bucket.value, path.key.value))
+      ).handle404
 
       override def doesObjectExist(path: Path): F[Boolean] = F.blocking(
         s3.doesObjectExist(path.bucket.value, path.key.value)
@@ -159,8 +159,8 @@ object S3Dsl {
           .flatTraverse(ol => F.blocking(Option(s3.listNextBatchOfObjects(ol)).map(ol => (ol, ol)))
         )
         val first = F.blocking(
-          Option(s3.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000)))
-        ).handle404(None)
+          s3.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000))
+        ).handle404
 
         Stream.eval(first)
           .flatMap(frst => frst.cata(
@@ -187,7 +187,7 @@ object S3Dsl {
 
       override def deleteObject(path: Path): F[Unit] = F.blocking(
         s3.deleteObject(path.bucket.value, path.key.value)
-      ).handle404(())
+      ).handle404.void
 
       //
       // Presigned URL
@@ -232,7 +232,7 @@ object S3Dsl {
     val path = Path(bucketNameOrErr(aws.getBucketName), keyOrErr(aws.getKey))
     val etag = Option(aws.getETag).map(ETag.apply)
     val storClass = Option(aws.getStorageClass).map(StorageClass.apply)
-    val lastModified = Option(aws.getLastModified).map(LastModified.apply)
+    val lastModified = Option(aws.getLastModified).map(lm => LastModified(lm.toInstant))
     ObjectSummary(path, aws.getSize, etag, storClass, lastModified)
   }
 
@@ -240,9 +240,10 @@ object S3Dsl {
     val contentType = Option(aws.getContentType).map(ContentType.apply)
     val md5 = Option(aws.getContentMD5).map(MD5.apply)
     val etag = Option(aws.getETag).map(ETag.apply)
-    val expiration = Option(aws.getExpirationTime).map(ExpirationTime.apply)
-    val lastModified = Option(aws.getLastModified).map(LastModified.apply)
-    ObjectMetadata(contentType, aws.getContentLength, md5, etag, expiration, lastModified)
+    val expiration = Option(aws.getExpirationTime).map(et => ExpirationTime(et.toInstant))
+    val storClass = Option(aws.getStorageClass).map(StorageClass.apply)
+    val lastModified = Option(aws.getLastModified).map(lm => LastModified(lm.toInstant))
+    ObjectMetadata(contentType, aws.getContentLength, md5, etag, expiration, storClass, lastModified)
   }
 
   private def createAwsS3Client(config: S3Config): AmazonS3 = {

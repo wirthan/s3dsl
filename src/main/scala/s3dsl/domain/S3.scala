@@ -1,6 +1,7 @@
 package s3dsl.domain
 
-import java.util.Date
+import java.time.Instant
+
 import eu.timepit.refined.api._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
@@ -44,15 +45,16 @@ object S3 {
   @newtype final case class ContentType(value: String)
   @newtype final case class MD5(value: String)
   @newtype final case class ETag(value: String)
-  @newtype final case class ExpirationTime(value: Date)
-  @newtype final case class LastModified(value: Date)
+  @newtype final case class ExpirationTime(value: Instant)
+  @newtype final case class LastModified(value: Instant)
   @newtype final case class StorageClass(value: String)
 
   final case class ObjectMetadata(contentType: Option[ContentType],
                                   contentLength: Long,
-                                  md5: Option[MD5],
+                                  md5: Option[MD5], // TODO? remove
                                   etag: Option[ETag],
                                   expirationTime: Option[ExpirationTime],
+                                  storageClass: Option[StorageClass],
                                   lastModified: Option[LastModified])
 
   final case class ObjectSummary(path: Path,
@@ -60,7 +62,6 @@ object S3 {
                                  etag: Option[ETag],
                                  storageClass: Option[StorageClass],
                                  lastModified: Option[LastModified])
-
 
   //
   // Access control

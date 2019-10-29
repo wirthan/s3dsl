@@ -1,14 +1,14 @@
 package s3dsl
 
+import java.net.URI
 import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 
-import S3Dsl._
+import s3dsl.S3Dslv2._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
 import enumeratum.scalacheck._
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
+import software.amazon.awssdk.services.s3.S3Client
 import eu.timepit.refined.cats.syntax._
 import org.specs2.mutable.Specification
 import fs2.Stream
@@ -19,28 +19,36 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 import cats.syntax.all._
 import cats.instances.all._
+import cats.effect.IO
 import org.specs2.execute.AsResult
 import s3dsl.domain.S3.HTTPMethod.GET
 import s3dsl.domain.auth.Domain
 import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.auth.Domain._
+import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
+import software.amazon.awssdk.auth.signer.AwsS3V4Signer
+import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption
+import software.amazon.awssdk.regions.Region
+
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
-  import cats.effect.IO
+  private val ecBlocking = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
+  private implicit val par = IO.ioParallel(catsEffectContextShift)
 
-  val ecBlocking = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
-
-  private val config = S3Config(
-    //creds = new BasicAWSCredentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"),
-    //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
-    creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
-    endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
-    blockingEc = ecBlocking
-  )
-
-  private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
-  private implicit val par = IO.ioParallel(cs)
+  //creds:  "Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+  //endpoint: "https://play.minio.io:9000", "us-east-1"
+  private val s3Client = S3Client
+    .builder()
+    .region(Region.US_EAST_1)
+    .endpointOverride(URI.create("http://localhost:9000"))
+    .overrideConfiguration(c => c.putAdvancedOption(SdkAdvancedClientOption.SIGNER, AwsS3V4Signer.create))
+    .credentialsProvider(
+      StaticCredentialsProvider.create(
+        AwsBasicCredentials.create("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF")
+      )
+    )
+    .build();
+  private val s3 = interpreter(s3Client, catsEffectContextShift, ecBlocking)
 
   "Bucket" in {
 

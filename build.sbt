@@ -15,6 +15,10 @@ val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
 val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.489"
 
+val aws = Seq(
+  "software.amazon.awssdk" % "s3" % "2.5.68"
+)
+
 val refined = Seq(
   "eu.timepit" %% "refined",
   "eu.timepit" %% "refined-cats"
@@ -89,7 +93,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ aws ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //
