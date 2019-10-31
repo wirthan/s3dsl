@@ -2,7 +2,7 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.6.1"
+val catsVersion       = "1.5.0"
 val catsEffectVersion = "1.1.0"
 val mouseVersion      = "0.20"
 val circeVersion      = "0.11.1"
