@@ -1,13 +1,13 @@
 package s3dsl.domain
 
-import java.util.Date
+import com.amazonaws.services.s3.model.{Permission => AwsPermission}
+import com.amazonaws.{HttpMethod => AwsHttpMethod}
+import enumeratum.EnumEntry.Uppercase
+import enumeratum.{Enum, EnumEntry}
 import eu.timepit.refined.api._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
-import com.amazonaws.{HttpMethod => AwsHttpMethod}
-import com.amazonaws.services.s3.model.{Permission => AwsPermission}
-import enumeratum.EnumEntry.Uppercase
-import enumeratum.{Enum, EnumEntry}
+import java.util.Date
 
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
@@ -39,6 +39,8 @@ object S3 {
   //
 
   final case class Object[F[_]](stream: Stream[F, Byte], meta: ObjectMetadata)
+
+  @newtype final case class CommonPrefix(value: Key)
 
   @newtype final case class ContentType(value: String)
   @newtype final case class MD5(value: String)

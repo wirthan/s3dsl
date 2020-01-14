@@ -31,3 +31,10 @@ bin/
 *.drv
 tags
 
+# Metals
+.bloop
+.metals
+metals.sbt
+
+# Nix
+shell.nix
