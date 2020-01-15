@@ -60,7 +60,7 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  scalaVersion := "2.12.9",
+  scalaVersion := "2.12.10",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
     "-Xsource:2.13",

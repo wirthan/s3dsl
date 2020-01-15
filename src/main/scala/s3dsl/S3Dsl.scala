@@ -2,17 +2,17 @@ package s3dsl
 
 import java.time.ZonedDateTime
 
-import s3dsl.domain.S3._
-import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
-import com.amazonaws.services.s3.AmazonS3
+import cats.effect.{ConcurrentEffect, ContextShift, Sync}
+import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
 import eu.timepit.refined.cats.syntax._
 import fs2.{Pipe, Stream}
-import cats.implicits._
 import mouse.all._
-import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
+import s3dsl.domain.S3._
 
 trait S3Dsl[F[_]] {
 
@@ -29,6 +29,7 @@ trait S3Dsl[F[_]] {
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
+  def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix]
   def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit]
   def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
@@ -151,8 +152,12 @@ object S3Dsl {
         s3.doesObjectExist(path.bucket.value, path.key.value)
       )
 
-      override def listObjects(path: Path): Stream[F, ObjectSummary] = {
+      override def listObjects(path: Path): Stream[F, ObjectSummary] =
+        listObjectsWithCommonPrefixes(path).collect {
+          case Left(objectSummary) => objectSummary
+        }
 
+      override def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix] = {
         def next(ol: ObjectListing): F[Option[(ObjectListing, ObjectListing)]] = Option(ol)
           .flatMap(_.isTruncated.option(ol))
           .flatTraverse(ol => F.blocking(Option(s3.listNextBatchOfObjects(ol)).map(ol => (ol, ol)))
@@ -166,8 +171,21 @@ object S3Dsl {
             ol => Stream.emit(ol).covary[F] ++ Stream.unfoldEval(ol)(next),
             Stream.empty.covary[F])
           )
-          .flatMap(l => Stream.emits(l.getObjectSummaries.asScala))
-          .map(toSummary)
+          .evalMap(objectListing =>
+            (
+              Sync[F].delay(objectListing.getObjectSummaries.asScala.toList),
+              Sync[F]
+                .delay(objectListing.getCommonPrefixes.asScala.toList)
+                .flatMap(_.traverse(Key.from(_).leftMap(new Exception(_) : Throwable).liftTo[F]))
+            )
+            .mapN( (objectSummaries, commonPrefixes) =>
+              List(
+                  objectSummaries.map(toSummary).map(_.asLeft[CommonPrefix]),
+                  commonPrefixes.map(CommonPrefix(_)).map(_.asRight[ObjectSummary])
+              ).combineAll
+            )
+          )
+          .flatMap(Stream.emits)
       }
 
       override def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit] = { fs2In =>

@@ -180,6 +180,8 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }.set(maxSize = 3).setGen2(Gens.blobGen)
     }
 
+    // TODO: listObjectsWithCommonPrefixes
+
     "listObjects" should {
 
       "succeed" in {
