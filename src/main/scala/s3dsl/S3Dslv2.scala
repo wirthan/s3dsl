@@ -1,18 +1,20 @@
 package s3dsl
 
+import java.io.{BufferedInputStream, InputStream}
 import java.time.ZonedDateTime
 
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 import mouse.boolean._
+import mouse.option._
 import eu.timepit.refined.cats.syntax._
 import fs2.{Pipe, Stream}
-import s3dsl.domain.S3
 import s3dsl.domain.S3._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import software.amazon.awssdk.core.ResponseInputStream
+import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model._
+import software.amazon.awssdk.services.s3.model.{StorageClass => _, _}
 
 import collection.JavaConverters._
 import scala.concurrent.ExecutionContext
@@ -31,8 +33,7 @@ trait S3Dslv2[F[_]] {
   def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def doesObjectExist(path: Path): F[Boolean]
-  def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit]
-  def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
+  def putObject(path: Path, contentLength: Long, contentType: Option[String], userMetadata: Map[String, String]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
   def listObjects(path: Path): Stream[F, ObjectSummary]
   def deleteObject(path: Path): F[Unit]
@@ -83,28 +84,24 @@ object S3Dslv2 {
             val contentType = Option(aws.contentType).map(ContentType.apply)
             val etag = Option(aws.eTag).map(ETag.apply)
             val expiration = Option(aws.expires).map(ExpirationTime.apply)
-            val storClass = Option(aws.storageClass.toString).map(S3.StorageClass.apply)
+            val storClass = Option(aws.storageClass).map(sc => StorageClass(sc.toString))
             val lastModified = Option(aws.lastModified).map(LastModified.apply)
-            ObjectMetadata(contentType, aws.contentLength, None, etag, expiration,storClass, lastModified)
+            ObjectMetadata(contentType, aws.contentLength, None, etag, expiration, storClass, lastModified)
           }
 
           F.delay(
             Object[F](
-              stream = fs2.io.readInputStream[F](F.pure(aws), chunkSize, blockingEc, closeAfterUse = false)(F, cs),
+              stream = fs2.io.readInputStream[F](F.pure(aws), chunkSize, blockingEc, closeAfterUse = true)(F, cs),
               meta = toMeta(aws.response)
             )
           )
-
         }
 
-        val acquire = F.blocking(
+        val read = F.blocking(
           s3.getObject(GetObjectRequest.builder.bucket(path.bucket.value).key(path.key.value).build)
         ).handle404
 
-        val release: Option[ResponseInputStream[GetObjectResponse]] => F[Unit] =
-          _.traverse(r => F.blocking(r.close).attempt).void
-
-        Resource.make(acquire)(release).use(_.traverse(convert))
+        read.flatMap(_.traverse(convert))
       }
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = {
@@ -112,7 +109,7 @@ object S3Dslv2 {
           val contentType = Option(aws.contentType).map(ContentType.apply)
           val etag = Option(aws.eTag).map(ETag.apply)
           val expiration = Option(aws.expires).map(ExpirationTime.apply)
-          val storClass = Option(aws.storageClass.toString).map(S3.StorageClass.apply)
+          val storClass = Option(aws.storageClass).map(sc => StorageClass(sc.toString))
           val lastModified = Option(aws.lastModified).map(LastModified.apply)
           ObjectMetadata(contentType, aws.contentLength, None, etag, expiration, storClass, lastModified)
         }
@@ -125,16 +122,24 @@ object S3Dslv2 {
         s3.headObject(HeadObjectRequest.builder.bucket(path.bucket.value).key(path.key.value).build)
       ).exists
 
-      override def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit] = ???
-      override def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit] = ???
-      override def copyObject(src: Path, dest: Path): F[Unit] = ???
+      override def putObject(path: Path,
+                             contentLength: Long,
+                             contentType: Option[String],
+                             userMetadata: Map[String, String]): Pipe[F, Byte, Unit] = fs2In =>
+        fs2.io.toInputStream(F)(fs2In).through(FS2.liftPipe(putObj(path, contentLength, contentType, userMetadata)))
+
+      override def copyObject(src: Path, dest: Path): F[Unit] = F.blocking(
+        s3.copyObject(
+          CopyObjectRequest.builder.copySource(src.toString).bucket(dest.bucket.value).key(dest.key.value).build
+        )
+      ).void
 
       override def listObjects(path: Path): Stream[F, ObjectSummary] = {
 
         def toSummary(aws: S3Object): ObjectSummary = {
           val p = Path(path.bucket, keyOrErr(aws.key))
           val etag = Option(aws.eTag).map(ETag.apply)
-          val storClass = Option(aws.storageClass.toString).map(S3.StorageClass.apply)
+          val storClass = Option(aws.storageClass).map(sc => StorageClass(sc.toString))
           val lastModified = Option(aws.lastModified).map(LastModified.apply)
           ObjectSummary(p, aws.size, etag, storClass, lastModified)
         }
@@ -154,11 +159,30 @@ object S3Dslv2 {
          .flatMap(nel => Stream.emits(nel.toList).covary[F])
          .map(toSummary)
       }
-      override def deleteObject(path: Path): F[Unit] = ???
+
+      override def deleteObject(path: Path): F[Unit] = F.blocking (
+        s3.deleteObject(DeleteObjectRequest.builder.bucket(path.bucket.value).key(path.key.value).build)
+      ).void
+
       override def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL] = ???
+
+      private def putObj(path: Path, contentLength: Long, contentType: Option[String], userMetadata: Map[String, String])
+                        (is: InputStream): F[Unit] = {
+
+        def reqBuilder(contentType: Option[String]): PutObjectRequest.Builder = {
+          val b = PutObjectRequest.builder
+          contentType.cata(b.contentType, b)
+        }
+
+        val req = reqBuilder(contentType).bucket(path.bucket.value).key(path.key.value)
+          .contentLength(contentLength)
+          .metadata(userMetadata.asJava)
+          .build
+
+        val bufferedIs = new BufferedInputStream(is)
+        F.blocking(s3.putObject(req, RequestBody.fromInputStream(bufferedIs, contentLength))).void
+      }
     }
-
-
 
   }
 
@@ -171,18 +195,3 @@ object S3Dslv2 {
   )
 
 }
-
-/*
-  /*
-  private def createS3Client(config: S3Config) = {
-    S3Client
-      .builder()
-      .region(region)
-      .endpointOverride(URI.create(config.))
-      .overrideConfiguration(c -> c.putAdvancedOption(SdkAdvancedClientOption.SIGNER, AwsS3V4Signer.create()))
-      .credentialsProvider(StaticCredentialsProvider.create(credentials))
-      .build();
-  }
-  */
-*/
-

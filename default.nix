@@ -1,9 +1,10 @@
 let
-  fetchNixpkgs = import ./fetchNixpkgs.nix;
-  nixpkgs = builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/f52505fac8c82716872a616c501ad9eff188f97f.tar.gz";
-    sha256 = "0q2m2qhyga9yq29yz90ywgjbn9hdahs7i8wwlq7b55rdbyiwa5dy";
-  };
+  nixpkgs = builtins.fetchGit {
+              name = "nixos-pinned";
+              url = https://github.com/nixos/nixpkgs/;
+              # `git ls-remote https://github.com/nixos/nixpkgs-channels nixos-unstable`
+              rev = "481a00f3b1194c11d348cdf3a948f57a8002fa12";
+            };
 in
 with import nixpkgs { config = {}; overlays = []; };
 
@@ -19,12 +20,14 @@ stdenv.mkDerivation {
   shellHook = ''
     shutdown_hook() {
       kill $PID
+      rm -rf target/minio
     }
+    rm -rf target/minio
     trap shutdown_hook EXIT
     export MINIO_ACCESS_KEY=BQKN8G6V2DQ83DH3AHPN
     export MINIO_SECRET_KEY=GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF
     export MINIO_DOMAIN=localhost
-    minio server -C target/minio/.config --address 127.0.0.1:9000 target/minio &
+    minio --compat server -C target/minio/.config --address 127.0.0.1:9000 target/minio &
     PID=$!
     figlet "s3dsl" | lolcat --freq 0.5
   '';

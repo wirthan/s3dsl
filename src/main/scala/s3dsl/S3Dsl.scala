@@ -3,7 +3,7 @@ package s3dsl
 import java.time.ZonedDateTime
 
 import s3dsl.domain.S3._
-import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
