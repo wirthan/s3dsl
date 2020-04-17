@@ -2,18 +2,19 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "1.5.0"
-val catsEffectVersion = "1.1.0"
-val mouseVersion      = "0.20"
-val circeVersion      = "0.11.1"
-val fs2Version        = "1.0.3"
-val refinedVersion    = "0.9.4"
+val catsVersion       = "2.1.1"
+val catsEffectVersion = "2.1.3"
+val mouseVersion      = "0.24"
+val circeVersion      = "0.13.0"
+val fs2Version        = "2.3.0"
+val refinedVersion    = "0.9.13"
 val enumeratumVersion = "1.5.13"
-val specs2Version     = "4.3.6"
+val specs2Version     = "4.4.1"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.661"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.762"
+val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 
 val refined = Seq(
   "eu.timepit" %% "refined",
@@ -37,7 +38,7 @@ val circe = Seq(
   "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
   "io.circe"     %% "circe-refined"        % circeVersion,
-  "com.beachape" %% "enumeratum-circe"     % "1.5.19"
+  "com.beachape" %% "enumeratum-circe"     % "1.5.23"
 )
 
 val testDeps = Seq(
@@ -60,7 +61,7 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  scalaVersion := "2.12.10",
+  scalaVersion := "2.12.11",
   scalacOptions ++= Seq(
     "-target:jvm-1.8",
     "-Xsource:2.13",
@@ -80,8 +81,8 @@ lazy val projectSettings = Seq(
   wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.Any, Wart.Nothing, Wart.PublicInference),
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
 )
 
 lazy val s3dsl = project.in(file("."))
@@ -89,7 +90,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum, jaxbApi) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //

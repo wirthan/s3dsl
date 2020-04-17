@@ -2,7 +2,7 @@ package s3dsl
 
 import java.time.ZonedDateTime
 
-import cats.effect.{ConcurrentEffect, ContextShift, Sync}
+import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
@@ -39,23 +39,20 @@ trait S3Dsl[F[_]] {
 }
 
 object S3Dsl {
-  import scala.concurrent.ExecutionContext
   import collection.JavaConverters._
   import java.io.InputStream
   import io.circe.syntax._
 
 
   final case class S3Config(creds: AWSCredentials,
-                            endpoint: EndpointConfiguration,
-                            blockingEc: ExecutionContext)
+                            endpoint: EndpointConfiguration)
 
-  def interpreter[F[_]](config: S3Config, cs: ContextShift[F])(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
+  def interpreter[F[_]](config: S3Config, cs: ContextShift[F], blocker: Blocker)(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
 
     val s3 = createAwsS3Client(config)
-    val blockingEc = config.blockingEc
 
     implicit class SyncSyntax(val sync: Sync[F]) {
-      def blocking[A](fa: => A): F[A] = cs.evalOn(blockingEc)(sync.delay(fa))
+      def blocking[A](fa: => A): F[A] = cs.blockOn(blocker)(sync.delay(fa))
     }
 
     new S3Dsl[F] {
@@ -138,7 +135,7 @@ object S3Dsl {
         obj <- s3object.traverse { o =>
           val isT: F[InputStream] = F.blocking(o.getObjectContent)
           F.delay(Object[F](
-            stream = fs2.io.readInputStream[F](isT, chunkSize, blockingEc, closeAfterUse = true)(F, cs),
+            stream = fs2.io.readInputStream[F](isT, chunkSize, blocker, closeAfterUse = true)(F, cs),
             meta = toMeta(o.getObjectMetadata))
           )
         }

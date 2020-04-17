@@ -26,20 +26,21 @@ import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.auth.Domain._
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
-  import cats.effect.IO
-
-  val ecBlocking = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
+  import cats.effect.{IO, Blocker}
 
   private val config = S3Config(
     //creds = new BasicAWSCredentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"),
     //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
     creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
     endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
-    blockingEc = ecBlocking
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
+  private val s3 = interpreter(
+    config,
+    cs,
+    Blocker.liftExecutionContext(ExecutionContext.fromExecutor(Executors.newCachedThreadPool))
+  )(IO.ioConcurrentEffect(cs))
   private implicit val par = IO.ioParallel(cs)
 
   "Bucket" in {
