@@ -13,7 +13,7 @@ val specs2Version     = "4.4.1"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.762"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.851"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 
 val refined = Seq(

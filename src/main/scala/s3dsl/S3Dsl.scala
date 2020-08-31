@@ -2,7 +2,7 @@ package s3dsl
 
 import java.time.ZonedDateTime
 
-import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
+import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Resource, Sync}
 import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
@@ -13,6 +13,8 @@ import fs2.{Pipe, Stream}
 import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
+
+import scala.concurrent.duration.DurationInt
 
 trait S3Dsl[F[_]] {
 
@@ -130,16 +132,18 @@ object S3Dsl {
       // Object
       //
 
-      override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = for {
-        s3object <- F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
-        obj <- s3object.traverse { o =>
-          val isT: F[InputStream] = F.blocking(o.getObjectContent)
-          F.delay(Object[F](
-            stream = fs2.io.readInputStream[F](isT, chunkSize, blocker, closeAfterUse = true)(F, cs),
-            meta = toMeta(o.getObjectMetadata))
-          )
+      override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = {
+        Resource.make(
+          F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
+        )(_.foreach(_.close()).pure[F]).use{ _.traverse { o =>
+            val isT: F[InputStream] = F.blocking(o.getObjectContent)
+            F.delay(Object[F](
+              stream = fs2.io.readInputStream[F](isT, chunkSize, blocker, closeAfterUse = true)(F, cs),
+              meta = toMeta(o.getObjectMetadata))
+            )
+          }
         }
-      } yield obj
+      }
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
@@ -265,8 +269,11 @@ object S3Dsl {
     import com.amazonaws.auth.AWSStaticCredentialsProvider
     import com.amazonaws.services.s3.AmazonS3ClientBuilder
 
-    val clientConfiguration = new ClientConfiguration
-    clientConfiguration.setSignerOverride("AWSS3V4SignerType")
+    val clientConfiguration = new ClientConfiguration()
+      .withConnectionTTL(5.minutes.toMillis)
+
+    clientConfiguration
+      .setSignerOverride("AWSS3V4SignerType")
 
     AmazonS3ClientBuilder.standard()
       .withEndpointConfiguration(config.endpoint)
