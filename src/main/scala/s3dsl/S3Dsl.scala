@@ -133,9 +133,11 @@ object S3Dsl {
       //
 
       override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = {
-        Resource.make(
-          F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
-        )(_.foreach(_.close()).pure[F]).use{ _.traverse { o =>
+        val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
+        val release: Option[S3Object] => F[Unit] = _.traverse_(obj => F.blocking(obj.close()))
+        
+        Resource.make(acquire)(release).use{ s3Obj =>
+          s3Obj.traverse { o =>
             val isT: F[InputStream] = F.blocking(o.getObjectContent)
             F.delay(Object[F](
               stream = fs2.io.readInputStream[F](isT, chunkSize, blocker, closeAfterUse = true)(F, cs),
@@ -144,6 +146,7 @@ object S3Dsl {
           }
         }
       }
+
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
