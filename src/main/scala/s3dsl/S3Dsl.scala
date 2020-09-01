@@ -27,7 +27,7 @@ trait S3Dsl[F[_]] {
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
-  def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]]
+  def getObject(path: Path, chunkSize: Int): Resource[F, Option[Object[F]]]
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
@@ -132,21 +132,25 @@ object S3Dsl {
       // Object
       //
 
-      override def getObject(path: Path, chunkSize: Int): F[Option[Object[F]]] = {
+      override def getObject(path: Path, chunkSize: Int): Resource[F, Option[Object[F]]] = {
+
         val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
         val release: Option[S3Object] => F[Unit] = _.traverse_(obj => F.blocking(obj.close()))
-        
-        Resource.make(acquire)(release).use{ s3Obj =>
-          s3Obj.traverse { o =>
-            val isT: F[InputStream] = F.blocking(o.getObjectContent)
-            F.delay(Object[F](
-              stream = fs2.io.readInputStream[F](isT, chunkSize, blocker, closeAfterUse = true)(F, cs),
-              meta = toMeta(o.getObjectMetadata))
-            )
-          }
-        }
-      }
 
+        Resource.make(acquire)(release).evalMap( _.traverse(o =>
+          F
+            .delay(o.getObjectMetadata)
+            .map(objectMetadata =>
+              // o.getObjectContent InputStream wird durch Resource geschlossen, deshalb closeAfterUse = false
+              Object[F](
+                stream = fs2.io.readInputStream[F](F.delay(o.getObjectContent), chunkSize, blocker, closeAfterUse = false)(F, cs),
+                meta = toMeta(objectMetadata)
+              )
+            )
+        ))
+
+
+      }
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
