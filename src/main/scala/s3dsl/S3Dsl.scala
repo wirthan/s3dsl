@@ -27,8 +27,9 @@ trait S3Dsl[F[_]] {
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
-  def getObject(path: Path, chunkSize: Int): Resource[F, Option[Object[F]]]
+
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
+  def getObject(path: Path, chunkSize: Int): Resource[F, Stream[F, Byte]]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
   def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix]
@@ -132,23 +133,20 @@ object S3Dsl {
       // Object
       //
 
-      override def getObject(path: Path, chunkSize: Int): Resource[F, Option[Object[F]]] = {
+      override def getObject(path: Path, chunkSize: Int): Resource[F, Stream[F, Byte]] = {
 
         val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
         val release: Option[S3Object] => F[Unit] = _.traverse_(obj => F.blocking(obj.close()))
 
-        Resource.make(acquire)(release).evalMap( _.traverse(o =>
-          F
-            .delay(o.getObjectMetadata)
-            .map(objectMetadata =>
-              // o.getObjectContent InputStream wird durch Resource geschlossen, deshalb closeAfterUse = false
-              Object[F](
-                stream = fs2.io.readInputStream[F](F.delay(o.getObjectContent), chunkSize, blocker, closeAfterUse = false)(F, cs),
-                meta = toMeta(objectMetadata)
-              )
-            )
-        ))
-
+        Resource
+          .make(acquire)(release)
+          .map( _.traverse(s3Object =>
+            // s3Object.getObjectContent InputStream wird durch Resource geschlossen, deshalb closeAfterUse = false
+            fs2.io.readInputStream[F](
+              F.blocking[InputStream](s3Object.getObjectContent), chunkSize, blocker, closeAfterUse = false
+            )(F, cs)
+          ).unNone
+        )
 
       }
 

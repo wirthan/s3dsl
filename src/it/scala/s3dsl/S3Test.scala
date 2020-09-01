@@ -244,37 +244,34 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         val blob = "testtesttest"
         val blobSize = blob.getBytes.length
 
-        val prog: TestProg[cats.effect.Resource[IO, Option[Object[IO]]]] = bucketPath => for {
+        val prog: TestProg[(List[Byte], Option[ObjectMetadata])] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
           _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
+          content <- s3.getObject(path, 1024).use{_.compile.toList}
+          meta <- s3.getObjectMetadata(path)
           _ <- s3.deleteObject(path)
-        } yield s3.getObject(path, 1024)
+        } yield (content, meta)
 
-        withBucket(prog) should returnValue { objResource: cats.effect.Resource[IO, Option[Object[IO]]] =>
+        withBucket(prog) should returnValue { tuple2: (List[Byte], Option[ObjectMetadata]) =>
 
-          objResource.use{ objO: Option[Object[IO]] =>
-            objO should beSome{ obj: Object[IO] =>
-              val bytes = obj.stream.compile.toList
-
-              bytes should returnValue { l: List[Byte] =>
-                l should haveSize(blobSize)
-              }
-              obj.meta.contentLength should be_>=(blobSize.longValue)
-              obj.meta.contentType aka "ContentType" should beSome
-            }
+          tuple2._1 should haveSize(blobSize)
+          tuple2._2 should beSome{ meta: ObjectMetadata =>
+            meta.contentLength should be_>=(blobSize.longValue)
+            meta.contentType aka "ContentType" should beSome
           }
 
         }
       }
 
-      "return None if Object does not exist" in {
+      "return Empty Stream if Object does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[cats.effect.Resource[IO, Option[Object[IO]]]] = bucketPath => for {
+          val prog: TestProg[Boolean] = bucketPath => for {
             path <- IO(bucketPath.copy(key = key))
-          } yield s3.getObject(path, 1024)
+            l <- s3.getObject(path, 1024).use(_.compile.toList)
+          } yield l.isEmpty
 
-          withBucket(prog) should returnValue {  objResource: cats.effect.Resource[IO, Option[Object[IO]]] =>
-            objResource.use{ objO => objO should_===(None)}
+          withBucket(prog) should returnValue {  isEmpty: Boolean =>
+            isEmpty should_=== true
           }
         }.set(maxSize = 5)
       }
