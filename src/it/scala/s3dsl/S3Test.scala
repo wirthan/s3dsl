@@ -25,6 +25,8 @@ import s3dsl.domain.auth.Domain
 import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.auth.Domain._
 
+import scala.concurrent.duration.DurationInt
+
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.{IO, Blocker}
 
@@ -33,6 +35,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
     creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
     endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
+    connectionTTL = Some(5.minutes)
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
@@ -244,22 +247,15 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         val blob = "testtesttest"
         val blobSize = blob.getBytes.length
 
-        val prog: TestProg[(List[Byte], Option[ObjectMetadata])] = bucketPath => for {
+        val prog: TestProg[List[Byte]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
           _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
-          content <- s3.getObject(path, 1024).use{_.compile.toList}
-          meta <- s3.getObjectMetadata(path)
+          content <- s3.getObject(path, 1024).compile.toList
           _ <- s3.deleteObject(path)
-        } yield (content, meta)
+        } yield content
 
-        withBucket(prog) should returnValue { tuple2: (List[Byte], Option[ObjectMetadata]) =>
-
-          tuple2._1 should haveSize(blobSize)
-          tuple2._2 should beSome{ meta: ObjectMetadata =>
-            meta.contentLength should be_>=(blobSize.longValue)
-            meta.contentType aka "ContentType" should beSome
-          }
-
+        withBucket(prog) should returnValue { content: List[Byte] =>
+          content should haveSize(blobSize)
         }
       }
 
@@ -267,7 +263,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         prop { key: Key =>
           val prog: TestProg[Boolean] = bucketPath => for {
             path <- IO(bucketPath.copy(key = key))
-            l <- s3.getObject(path, 1024).use(_.compile.toList)
+            l <- s3.getObject(path, 1024).compile.toList
           } yield l.isEmpty
 
           withBucket(prog) should returnValue {  isEmpty: Boolean =>

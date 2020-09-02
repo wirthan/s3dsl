@@ -2,7 +2,7 @@ package s3dsl
 
 import java.time.ZonedDateTime
 
-import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
@@ -14,7 +14,7 @@ import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
 
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 trait S3Dsl[F[_]] {
 
@@ -29,7 +29,7 @@ trait S3Dsl[F[_]] {
 
 
   def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
-  def getObject(path: Path, chunkSize: Int): Resource[F, Stream[F, Byte]]
+  def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
   def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix]
@@ -48,7 +48,8 @@ object S3Dsl {
 
 
   final case class S3Config(creds: AWSCredentials,
-                            endpoint: EndpointConfiguration)
+                            endpoint: EndpointConfiguration,
+                            connectionTTL: Option[FiniteDuration])
 
   def interpreter[F[_]](config: S3Config, cs: ContextShift[F], blocker: Blocker)(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
 
@@ -133,21 +134,20 @@ object S3Dsl {
       // Object
       //
 
-      override def getObject(path: Path, chunkSize: Int): Resource[F, Stream[F, Byte]] = {
+      override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = {
 
         val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
         val release: Option[S3Object] => F[Unit] = _.traverse_(obj => F.blocking(obj.close()))
 
-        Resource
-          .make(acquire)(release)
-          .map( _.traverse(s3Object =>
-            // s3Object.getObjectContent InputStream wird durch Resource geschlossen, deshalb closeAfterUse = false
-            fs2.io.readInputStream[F](
-              F.blocking[InputStream](s3Object.getObjectContent), chunkSize, blocker, closeAfterUse = false
-            )(F, cs)
-          ).unNone
-        )
-
+        fs2.Stream
+          .bracket(acquire)(release)
+          .flatMap( _.traverse(s3Object =>
+            // s3Object.getObjectContent InputStream will be closed via fs2.Stream.bracket, that's why closeAfterUse = false
+              fs2.io.readInputStream[F](
+                F.blocking[InputStream](s3Object.getObjectContent), chunkSize, blocker, closeAfterUse = false
+              )(F, cs)
+            ).unNone
+          )
       }
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
@@ -275,7 +275,10 @@ object S3Dsl {
     import com.amazonaws.services.s3.AmazonS3ClientBuilder
 
     val clientConfiguration = new ClientConfiguration()
-      .withConnectionTTL(5.minutes.toMillis)
+      .withConnectionTTL(
+        config.connectionTTL.map(_.toMillis)
+          .getOrElse(ClientConfiguration.DEFAULT_CONNECTION_TTL)
+      )
 
     clientConfiguration
       .setSignerOverride("AWSS3V4SignerType")
