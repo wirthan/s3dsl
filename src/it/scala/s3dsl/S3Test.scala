@@ -25,6 +25,8 @@ import s3dsl.domain.auth.Domain
 import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.auth.Domain._
 
+import scala.concurrent.duration.DurationInt
+
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.{IO, Blocker}
 
@@ -33,6 +35,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
     creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
     endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
+    connectionTTL = Some(5.minutes)
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
@@ -239,38 +242,33 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "getObject" should {
 
       "succeed" in {
+
         val key = Key("a/b/c.txt")
         val blob = "testtesttest"
         val blobSize = blob.getBytes.length
 
-        val prog: TestProg[Option[Object[IO]]] = bucketPath => for {
+        val prog: TestProg[List[Byte]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
           _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
-          obj <- s3.getObject(path, 1024)
+          content <- s3.getObject(path, 1024).compile.toList
           _ <- s3.deleteObject(path)
-        } yield obj
+        } yield content
 
-        withBucket(prog) should returnValue { objO: Option[Object[IO]] =>
-          objO should beSome{ obj: Object[IO] =>
-            val bytes = obj.stream.compile.toList
-
-            bytes should returnValue { l: List[Byte] =>
-              l should haveSize(blobSize)
-            }
-            obj.meta.contentLength should be_>=(blobSize.longValue)
-            obj.meta.contentType aka "ContentType" should beSome
-          }
+        withBucket(prog) should returnValue { content: List[Byte] =>
+          content should haveSize(blobSize)
         }
       }
 
-      "return None if Object does not exist" in {
+      "return Empty Stream if Object does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[Option[Object[IO]]] = bucketPath => for {
+          val prog: TestProg[Boolean] = bucketPath => for {
             path <- IO(bucketPath.copy(key = key))
-            obj <- s3.getObject(path, 1024)
-          } yield obj
+            l <- s3.getObject(path, 1024).compile.toList
+          } yield l.isEmpty
 
-          withBucket(prog) should returnValue(None)
+          withBucket(prog) should returnValue {  isEmpty: Boolean =>
+            isEmpty should_=== true
+          }
         }.set(maxSize = 5)
       }
 

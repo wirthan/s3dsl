@@ -34,14 +34,13 @@ val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
 ```scala
 val path = Path(BucketName("mybucket"), Key("blob.txt"))
 val blob = "abc".getBytes
-
-// S3.Object consists of Stream[IO, Byte] and ObjectMetadata
-val obj: Option[S3.Object[IO]] = for {
+] 
+val content: Stream[IO, Byte] = for {
   _ <- Stream.emits(blob).covary[IO]
         .through(s3.putObject(path, blob.length.longValue))
         .compile.drain
-  obj <- s3.getObject(path, 1024)      
-} yield obj
+  content <- s3.getObject(path, 1024)      
+} yield content
 
 ```
 

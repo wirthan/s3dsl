@@ -5,7 +5,6 @@ import com.amazonaws.{HttpMethod => AwsHttpMethod}
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{Enum, EnumEntry}
 import eu.timepit.refined.api._
-import fs2.Stream
 import io.estatico.newtype.macros.newtype
 import java.util.Date
 
@@ -37,8 +36,6 @@ object S3 {
   //
   // Object & Object metadata
   //
-
-  final case class Object[F[_]](stream: Stream[F, Byte], meta: ObjectMetadata)
 
   @newtype final case class CommonPrefix(value: Key)
 
