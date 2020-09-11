@@ -1,5 +1,6 @@
 package s3dsl
 
+import java.io.IOException
 import java.time.ZonedDateTime
 
 import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
@@ -137,7 +138,12 @@ object S3Dsl {
       override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = {
 
         val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
-        val release: Option[S3Object] => F[Unit] = _.traverse_(obj => F.blocking(obj.close()))
+        val release: Option[S3Object] => F[Unit] = _.traverse_ { obj =>
+          for {
+            shouldAbort <- F.blocking(obj.getObjectContent.getDelegateStream.available =!= 0).recover { case _: IOException => true }
+            _ <- F.blocking(shouldAbort.fold(obj.getObjectContent.abort, obj.close)).attempt.void
+          } yield ()
+        }
 
         fs2.Stream
           .bracket(acquire)(release)
