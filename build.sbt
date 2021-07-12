@@ -2,18 +2,22 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val catsVersion       = "2.1.1"
-val catsEffectVersion = "2.1.3"
-val mouseVersion      = "0.24"
-val circeVersion      = "0.13.0"
-val fs2Version        = "2.3.0"
-val refinedVersion    = "0.9.13"
-val enumeratumVersion = "1.5.13"
+val scala2_12 = "2.12.14"
+val scala2_13 = "2.13.6"
+val scala2 = List(scala2_12, scala2_13)
+
+val catsVersion       = "2.6.1"
+val catsEffectVersion = "2.5.1"
+val mouseVersion      = "1.0.4"
+val circeVersion      = "0.14.1"
+val fs2Version        = "2.5.9"
+val refinedVersion    = "0.9.26"
+val enumeratumVersion = "1.7.0"
 val specs2Version     = "4.4.1"
 
-val newtype    = "io.estatico"  %% "newtype"         % "0.4.2"
+val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.11.851"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.21"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 
 val refined = Seq(
@@ -38,7 +42,7 @@ val circe = Seq(
   "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
   "io.circe"     %% "circe-refined"        % circeVersion,
-  "com.beachape" %% "enumeratum-circe"     % "1.5.23"
+  "com.beachape" %% "enumeratum-circe"     % enumeratumVersion,
 )
 
 val testDeps = Seq(
@@ -61,9 +65,8 @@ lazy val wartsInTest = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  scalaVersion := "2.12.11",
+  crossScalaVersions := scala2,
   scalacOptions ++= Seq(
-    "-target:jvm-1.8",
     "-Xsource:2.13",
     "-language:higherKinds",
     "-language:implicitConversions",
