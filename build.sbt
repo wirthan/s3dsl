@@ -13,7 +13,7 @@ val circeVersion      = "0.14.1"
 val fs2Version        = "2.5.9"
 val refinedVersion    = "0.9.26"
 val enumeratumVersion = "1.7.0"
-val specs2Version     = "4.4.1"
+val specs2Version     = "4.11.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
