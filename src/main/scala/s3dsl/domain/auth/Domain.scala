@@ -192,7 +192,10 @@ object Domain {
 
     private val mapEncoder = implicitly[Encoder[Map[String, List[String]]]]
     implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance { set =>
-      val map = set.map(p => p.provider.v -> p.id.v).groupBy(_._1).mapValues(_.map(_._2).toList)
+      val map = set
+        .map(p => p.provider.v -> p.id.v)
+        .groupBy(_._1)
+        .mapValues(_.map(_._2).toList).toMap
       map.asJson(mapEncoder): Json
     }
 

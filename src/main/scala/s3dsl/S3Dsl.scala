@@ -14,8 +14,8 @@ import fs2.{Pipe, Stream}
 import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
-
 import scala.concurrent.duration.FiniteDuration
+import collection.immutable._
 
 trait S3Dsl[F[_]] {
 
@@ -249,11 +249,11 @@ object S3Dsl {
   }
 
   private def bucketNameOrErr(s: String): BucketName = BucketName.validate(s).fold(
-    l => sys.error(s"Programming error in bucket name validation: $l"), identity
+    l => sys.error(s"Programming error in bucket name validation: ${l.show}"), identity
   )
 
   private def keyOrErr(s: String): Key = Key.validate(s).fold(
-    l => sys.error(s"Programming error in s3 key validation: $l"), identity
+    l => sys.error(s"Programming error in s3 key validation: ${l.show}"), identity
   )
 
 

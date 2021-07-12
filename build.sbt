@@ -19,6 +19,7 @@ val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
 val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.21"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
+val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
 
 val refined = Seq(
   "eu.timepit" %% "refined",
@@ -49,9 +50,9 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.0-1",
+  "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
-  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.1.0",
+  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.0",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")
@@ -73,19 +74,28 @@ lazy val projectSettings = Seq(
     "-deprecation",
     "-feature",
     "-Xlint",
-    "-Ypartial-unification",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
     "-Ywarn-unused",
-    "-Ywarn-unused-import",
     //"-Xfatal-warnings"
   ),
+  libraryDependencies ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, n)) if n <= 12 =>
+        List(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
+      case _                       => Nil
+    }
+  },
+  Compile / scalacOptions ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, n)) if n <= 12 => List("-Ypartial-unification", "-Yno-adapted-args", "-Ywarn-unused-import")
+      case _                       => List("-Ymacro-annotations")
+    }
+  },
   wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.Any, Wart.Nothing, Wart.PublicInference),
   wartremoverWarnings in (Test, test) ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
 )
 
 lazy val s3dsl = project.in(file("."))
@@ -93,7 +103,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum, jaxbApi) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, newtype, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //

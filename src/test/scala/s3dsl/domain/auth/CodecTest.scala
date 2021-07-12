@@ -80,8 +80,8 @@ object CodecTest extends Specification with ScalaCheck {
 
       allow.asJson.asString should beSome("Allow")
       deny.asJson.asString should beSome("Deny")
-      allow.asJson.as[Effect] should beRight(Effect.Allow)
-      deny.asJson.as[Effect] should beRight(Effect.Deny)
+      allow.asJson.as[Effect] should beRight[Effect](Effect.Allow)
+      deny.asJson.as[Effect] should beRight[Effect](Effect.Deny)
     }
   }
 
