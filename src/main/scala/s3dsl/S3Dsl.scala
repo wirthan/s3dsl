@@ -29,7 +29,6 @@ trait S3Dsl[F[_]] {
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
 
-  def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
@@ -43,10 +42,12 @@ trait S3Dsl[F[_]] {
 
   def getObjectTags(path: Path): F[Option[ObjectTags]]
   def setObjectTags(path: Path, tags: ObjectTags): F[Unit]
+
+  def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
 }
 
 object S3Dsl {
-  import collection.JavaConverters._
+  import scala.jdk.CollectionConverters._
   import java.io.InputStream
   import io.circe.syntax._
 
@@ -163,9 +164,17 @@ object S3Dsl {
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
       ).handle404(None)
 
-      override def doesObjectExist(path: Path): F[Boolean] = F.blocking(
-        s3.doesObjectExist(path.bucket.value, path.key.value)
-      )
+      override def doesObjectExist(path: Path): F[Boolean] = {
+        println(s"config-endpoint: ${config.endpoint.getSigningRegion}")
+        F.blocking(
+          s3.doesObjectExist(path.bucket.value, path.key.value)
+        )
+          .onError{ e =>
+            F.delay(
+              println(s"!!!! ERROR !!!! doesObjectExist - region: ${config.endpoint.getSigningRegion} - ${path.toString} - ${e.toString} ")
+            )
+          }
+      }
 
       override def listObjects(path: Path): Stream[F, ObjectSummary] =
         listObjectsWithCommonPrefixes(path).collect {
@@ -263,11 +272,7 @@ object S3Dsl {
         val tagging = new ObjectTagging(tags.value.map{case (k, v) => new Tag(k, v)}.toList.asJava)
         val request = new SetObjectTaggingRequest(path.bucket.value, path.key.value, tagging)
 
-        F
-          .blocking(s3.setObjectTagging(request))
-          .map(_ => F.unit)
-          .handle404(F.unit)
-          .flatten
+        F.blocking(s3.setObjectTagging(request))
       }
     }
   }

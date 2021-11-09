@@ -4,7 +4,10 @@ name := "s3dsl"
 
 val scala2_12 = "2.12.14"
 val scala2_13 = "2.13.6"
-val scala2 = List(scala2_12, scala2_13)
+val scala2 = List(scala2_13)
+
+scalaVersion := scala2_13
+ThisBuild / crossScalaVersions := scala2
 
 val catsVersion       = "2.6.1"
 val catsEffectVersion = "2.5.1"
@@ -17,7 +20,7 @@ val specs2Version     = "4.11.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.21"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.105"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
 
