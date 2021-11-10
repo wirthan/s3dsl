@@ -2,7 +2,6 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val scala2_12 = "2.12.14"
 val scala2_13 = "2.13.6"
 val scala2 = List(scala2_13)
 
@@ -71,7 +70,6 @@ lazy val wartsInTest = Warts.allBut(
 lazy val projectSettings = Seq(
   crossScalaVersions := scala2,
   scalacOptions ++= Seq(
-    "-Xsource:2.13",
     "-language:higherKinds",
     "-language:implicitConversions",
     "-deprecation",
