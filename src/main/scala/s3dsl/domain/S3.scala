@@ -60,6 +60,8 @@ object S3 {
                                  storageClass: Option[StorageClass],
                                  lastModified: Option[LastModified])
 
+  final case class ObjectTags(value: Map[String, String])
+
   //
   // Access control
   //

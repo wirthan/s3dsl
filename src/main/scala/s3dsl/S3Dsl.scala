@@ -2,18 +2,18 @@ package s3dsl
 
 import java.io.IOException
 import java.time.ZonedDateTime
-
 import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.model.{ListObjectsRequest, ObjectListing, S3Object, S3ObjectSummary, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.model.{GetObjectTaggingRequest, ListObjectsRequest, ObjectListing, ObjectTagging, S3Object, S3ObjectSummary, SetObjectTaggingRequest, Tag, ObjectMetadata => AwsObjectMetadata}
 import eu.timepit.refined.cats.syntax._
 import fs2.{Pipe, Stream}
 import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
+
 import scala.concurrent.duration.FiniteDuration
 import collection.immutable._
 
@@ -29,7 +29,6 @@ trait S3Dsl[F[_]] {
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
 
-  def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   def doesObjectExist(path: Path): F[Boolean]
   def listObjects(path: Path): Stream[F, ObjectSummary]
@@ -40,10 +39,15 @@ trait S3Dsl[F[_]] {
   def deleteObject(path: Path): F[Unit]
 
   def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL]
+
+  def getObjectTags(path: Path): F[Option[ObjectTags]]
+  def setObjectTags(path: Path, tags: ObjectTags): F[Unit]
+
+  def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
 }
 
 object S3Dsl {
-  import collection.JavaConverters._
+  import scala.jdk.CollectionConverters._
   import java.io.InputStream
   import io.circe.syntax._
 
@@ -160,9 +164,11 @@ object S3Dsl {
         Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
       ).handle404(None)
 
-      override def doesObjectExist(path: Path): F[Boolean] = F.blocking(
-        s3.doesObjectExist(path.bucket.value, path.key.value)
-      )
+      override def doesObjectExist(path: Path): F[Boolean] = {
+        F.blocking(
+          s3.doesObjectExist(path.bucket.value, path.key.value)
+        )
+      }
 
       override def listObjects(path: Path): Stream[F, ObjectSummary] =
         listObjectsWithCommonPrefixes(path).collect {
@@ -245,6 +251,23 @@ object S3Dsl {
         } yield ()).void
       }
 
+      override def getObjectTags(path: Path): F[Option[ObjectTags]] = {
+        val request = new GetObjectTaggingRequest(path.bucket.value, path.key.value)
+
+        F
+          .blocking(s3.getObjectTagging(request))
+          .map(_.getTagSet.asScala.map(t => t.getKey -> t.getValue).toMap)
+          .map(ObjectTags)
+          .map(Option.apply)
+          .handle404(None)
+      }
+
+      override def setObjectTags(path: Path, tags: ObjectTags): F[Unit] = {
+        val tagging = new ObjectTagging(tags.value.map{case (k, v) => new Tag(k, v)}.toList.asJava)
+        val request = new SetObjectTaggingRequest(path.bucket.value, path.key.value, tagging)
+
+        F.blocking(s3.setObjectTagging(request))
+      }
     }
   }
 
