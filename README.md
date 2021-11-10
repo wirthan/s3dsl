@@ -44,5 +44,5 @@ val content: Stream[IO, Byte] = for {
 
 ```
 
-[Link-SonatypeReleases]: https://oss.sonatype.org/content/repositories/releases/com/github/wirthan/s3dsl_2.12/ "Sonatype Releases"
-[Badge-SonatypeReleases]: https://img.shields.io/nexus/r/https/oss.sonatype.org/com.github.wirthan/s3dsl_2.12.svg "Sonatype Releases"
+[Link-SonatypeReleases]: https://oss.sonatype.org/content/repositories/releases/com/github/wirthan/s3dsl_2.13/ "Sonatype Releases"
+[Badge-SonatypeReleases]: https://img.shields.io/nexus/r/https/oss.sonatype.org/com.github.wirthan/s3dsl_2.13.svg "Sonatype Releases"
