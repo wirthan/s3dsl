@@ -87,7 +87,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
       "return None if bucket does not exist" in {
         prop { bn: BucketName =>
-          s3.getBucketAcl(bn) should returnValue(None)
+          s3.getBucketAcl(bn) should returnValue(Option.empty[s3dsl.domain.S3.AccessControlList])
         }
       }
 
@@ -300,9 +300,43 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             meta <- s3.getObjectMetadata(path)
           } yield meta
 
-          withBucket(prog) should returnValue(None)
+          withBucket(prog) should returnValue(Option.empty[ObjectMetadata])
         }.set(maxSize = 5)
       }
+    }
+
+    "objectTagging" should {
+
+      "succeed" in {
+        val key = Key("a/b/c.txt")
+        val blob = "testtesttest"
+        val blobSize = blob.getBytes.length
+        val referenceTags = ObjectTags(Map("k1" -> "v1"))
+
+        val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
+          path <- IO(bucketPath.copy(key = key))
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
+          _ <- s3.setObjectTags(path, referenceTags)
+          tags <- s3.getObjectTags(path)
+          _ <- s3.deleteObject(path)
+        } yield tags
+
+        withBucket(prog) should returnValue { tagsOpt: Option[ObjectTags] =>
+          tagsOpt should beSome(referenceTags)
+        }
+      }
+
+      "return None if Object does not exist" in {
+        prop { key: Key =>
+          val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
+            path <- IO(bucketPath.copy(key = key))
+            tags <- s3.getObjectTags(path)
+          } yield tags
+
+          withBucket(prog) should returnValue(Option.empty[ObjectTags])
+        }.set(maxSize = 5)
+      }
+
     }
 
     "generatePresignedUrl" should {

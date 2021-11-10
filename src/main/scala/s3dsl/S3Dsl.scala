@@ -165,15 +165,9 @@ object S3Dsl {
       ).handle404(None)
 
       override def doesObjectExist(path: Path): F[Boolean] = {
-        println(s"config-endpoint: ${config.endpoint.getSigningRegion}")
         F.blocking(
           s3.doesObjectExist(path.bucket.value, path.key.value)
         )
-          .onError{ e =>
-            F.delay(
-              println(s"!!!! ERROR !!!! doesObjectExist - region: ${config.endpoint.getSigningRegion} - ${path.toString} - ${e.toString} ")
-            )
-          }
       }
 
       override def listObjects(path: Path): Stream[F, ObjectSummary] =

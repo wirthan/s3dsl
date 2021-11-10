@@ -4,11 +4,11 @@ import java.time.{Month, Year, ZoneId, ZonedDateTime}
 
 import cats.Applicative
 import org.scalacheck.cats.instances.GenInstances._
-import collection.JavaConverters._
+
 import eu.timepit.refined.cats.syntax._
 import org.scalacheck.{Arbitrary, Gen}
 import s3dsl.domain.S3._
-
+import scala.jdk.CollectionConverters._
 
 object Gens {
 
