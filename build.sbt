@@ -23,6 +23,7 @@ val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.184"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
 
+
 val refined = Seq(
   "eu.timepit" %% "refined",
   "eu.timepit" %% "refined-cats"

@@ -7,13 +7,13 @@ import cats.implicits._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.model.{GetObjectTaggingRequest, ListObjectsRequest, ObjectListing, ObjectTagging, S3Object, S3ObjectSummary, SetObjectTaggingRequest, Tag, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.model.{GetObjectTaggingRequest, ListObjectsRequest, ObjectListing, ObjectTagging, S3Object, S3ObjectInputStream, S3ObjectSummary, SetObjectTaggingRequest, Tag, ObjectMetadata => AwsObjectMetadata}
+import com.amazonaws.services.s3.transfer.TransferManagerBuilder
 import eu.timepit.refined.cats.syntax._
 import fs2.{Pipe, Stream}
 import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
-
 import scala.concurrent.duration.FiniteDuration
 import collection.immutable._
 
@@ -36,6 +36,7 @@ trait S3Dsl[F[_]] {
   def putObject(path: Path, contentLength: Long): Pipe[F, Byte, Unit]
   def putObjectWithHeaders(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
+  def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit]
   def deleteObject(path: Path): F[Unit]
 
   def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL]
@@ -56,9 +57,10 @@ object S3Dsl {
                             endpoint: EndpointConfiguration,
                             connectionTTL: Option[FiniteDuration])
 
-  def interpreter[F[_]](config: S3Config, cs: ContextShift[F], blocker: Blocker)(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
+  def withConfig[F[_]](config: S3Config, cs: ContextShift[F], blocker: Blocker)(implicit F: ConcurrentEffect[F]): S3Dsl[F] =
+    withClient(createAwsS3Client(config), cs, blocker)
 
-    val s3 = createAwsS3Client(config)
+  def withClient[F[_]](client: AmazonS3, cs: ContextShift[F], blocker: Blocker)(implicit F: ConcurrentEffect[F]): S3Dsl[F] = {
 
     implicit class SyncSyntax(val sync: Sync[F]) {
       def blocking[A](fa: => A): F[A] = cs.blockOn(blocker)(sync.delay(fa))
@@ -73,12 +75,12 @@ object S3Dsl {
       override def doesBucketExist(name: BucketName): F[Boolean] = listBuckets.map(_.contains(name))
         // s3.doesBucketExistV2(name.value) does not work with minio
 
-      override def createBucket(name: BucketName): F[Unit] = F.blocking(s3.createBucket(name.value)).void
+      override def createBucket(name: BucketName): F[Unit] = F.blocking(client.createBucket(name.value)).void
 
-      override def deleteBucket(name: BucketName): F[Unit] = F.blocking(s3.deleteBucket(name.value)).void
+      override def deleteBucket(name: BucketName): F[Unit] = F.blocking(client.deleteBucket(name.value)).void
 
       override def listBuckets: F[List[BucketName]] =
-        F.blocking(s3.listBuckets).map(_.asScala.toList.map(b => bucketNameOrErr(b.getName)))
+        F.blocking(client.listBuckets).map(_.asScala.toList.map(b => bucketNameOrErr(b.getName)))
 
       //
       // Bucket ACL
@@ -116,7 +118,7 @@ object S3Dsl {
           AccessControlList(grants, owner)
         }
 
-        F.blocking(Option(s3.getBucketAcl(name.value)).map(fromAws)).handle404(None)
+        F.blocking(Option(client.getBucketAcl(name.value)).map(fromAws)).handle404(None)
       }
 
       //
@@ -125,7 +127,7 @@ object S3Dsl {
 
       override def getBucketPolicy(name: BucketName): F[Option[PolicyRead]] = {
         import io.circe.parser.parse
-        F.blocking(s3.getBucketPolicy(name.value)).map(aws =>
+        F.blocking(client.getBucketPolicy(name.value)).map(aws =>
           Option(aws.getPolicyText)
             .map(s => parse(s).flatMap(_.as[PolicyRead]))
             .map(e => e.fold(l => sys.error(l.getMessage), identity))
@@ -133,21 +135,20 @@ object S3Dsl {
       }
 
       override def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit] =
-        F.blocking(s3.setBucketPolicy(bucket.value, policy.asJson.noSpaces))
+        F.blocking(client.setBucketPolicy(bucket.value, policy.asJson.noSpaces))
 
       //
       // Object
       //
 
       override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = {
+        def closeOrAbortJavaS3Stream(is: S3ObjectInputStream): F[Unit] = for {
+          shouldAbort <- F.blocking(is.getDelegateStream.available =!= 0).recover { case _: IOException => true }
+          _ <- F.blocking(shouldAbort.fold(is.abort, is.close)).attempt.void
+        } yield ()
 
-        val acquire = F.blocking[Option[S3Object]](Some(s3.getObject(path.bucket.value, path.key.value))).handle404(None)
-        val release: Option[S3Object] => F[Unit] = _.traverse_ { obj =>
-          for {
-            shouldAbort <- F.blocking(obj.getObjectContent.getDelegateStream.available =!= 0).recover { case _: IOException => true }
-            _ <- F.blocking(shouldAbort.fold(obj.getObjectContent.abort, obj.close)).attempt.void
-          } yield ()
-        }
+        val acquire = F.blocking[Option[S3Object]](Some(client.getObject(path.bucket.value, path.key.value))).handle404(None)
+        val release: Option[S3Object] => F[Unit] = _.traverse_(obj => closeOrAbortJavaS3Stream(obj.getObjectContent))
 
         fs2.Stream
           .bracket(acquire)(release)
@@ -161,12 +162,12 @@ object S3Dsl {
       }
 
       override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = F.blocking(
-        Some(s3.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
+        Some(client.getObjectMetadata(path.bucket.value, path.key.value)).map(toMeta)
       ).handle404(None)
 
       override def doesObjectExist(path: Path): F[Boolean] = {
         F.blocking(
-          s3.doesObjectExist(path.bucket.value, path.key.value)
+          client.doesObjectExist(path.bucket.value, path.key.value)
         )
       }
 
@@ -178,10 +179,10 @@ object S3Dsl {
       override def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix] = {
         def next(ol: ObjectListing): F[Option[(ObjectListing, ObjectListing)]] = Option(ol)
           .flatMap(_.isTruncated.option(ol))
-          .flatTraverse(ol => F.blocking(Option(s3.listNextBatchOfObjects(ol)).map(ol => (ol, ol)))
+          .flatTraverse(ol => F.blocking(Option(client.listNextBatchOfObjects(ol)).map(ol => (ol, ol)))
         )
         val first = F.blocking(
-          Option(s3.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000)))
+          Option(client.listObjects(new ListObjectsRequest(path.bucket.value, path.key.value, "", "/", 1000)))
         ).handle404(None)
 
         Stream.eval(first)
@@ -217,11 +218,28 @@ object S3Dsl {
       }
 
       override def copyObject(src: Path, dest: Path): F[Unit] = F.blocking(
-        s3.copyObject(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value)
+        client.copyObject(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value)
       ).void
 
+      override def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit] = {
+        val minPartSize = 5L * 1024 * 1024
+        val partSize = Math.min(5L * 1024 * 1024 * 1024, Math.max(minPartSize, partSizeBytes))
+        for {
+          tm <- Sync[F].delay(
+            TransferManagerBuilder
+              .standard()
+              .withS3Client(client)
+              .withMultipartCopyThreshold(5 * 1024 * 1024)
+              .withMultipartCopyPartSize(partSize)
+              .withAlwaysCalculateMultipartMd5(true)
+              .build
+          )
+          _ <- F.delay(tm.copy(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value).waitForCompletion)
+        } yield ()
+      }
+
       override def deleteObject(path: Path): F[Unit] = F.blocking(
-        s3.deleteObject(path.bucket.value, path.key.value)
+        client.deleteObject(path.bucket.value, path.key.value)
       ).handle404(())
 
       //
@@ -231,7 +249,7 @@ object S3Dsl {
       // FIXME: Requests that are pre-signed by SigV4 algorithm are valid for at most 7 days
       override def generatePresignedUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): F[URL] = F.delay(
         URL(
-          s3.generatePresignedUrl(
+          client.generatePresignedUrl(
             path.bucket.value,
             path.key.value,
             java.util.Date.from(expiration.toInstant),
@@ -247,7 +265,7 @@ object S3Dsl {
 
         (for {
           _ <- Stream.emits(headers).evalTap(t2 => F.delay(meta.setHeader(t2._1, t2._2))).compile.drain
-          _ <- F.blocking(s3.putObject(path.bucket.value, path.key.value, is, meta))
+          _ <- F.blocking(client.putObject(path.bucket.value, path.key.value, is, meta))
         } yield ()).void
       }
 
@@ -255,7 +273,7 @@ object S3Dsl {
         val request = new GetObjectTaggingRequest(path.bucket.value, path.key.value)
 
         F
-          .blocking(s3.getObjectTagging(request))
+          .blocking(client.getObjectTagging(request))
           .map(_.getTagSet.asScala.map(t => t.getKey -> t.getValue).toMap)
           .map(ObjectTags)
           .map(Option.apply)
@@ -266,7 +284,7 @@ object S3Dsl {
         val tagging = new ObjectTagging(tags.value.map{case (k, v) => new Tag(k, v)}.toList.asJava)
         val request = new SetObjectTaggingRequest(path.bucket.value, path.key.value, tagging)
 
-        F.blocking(s3.setObjectTagging(request)).void
+        F.blocking(client.setObjectTagging(request)).void
       }
     }
   }
@@ -311,6 +329,7 @@ object S3Dsl {
 
     clientConfiguration
       .setSignerOverride("AWSS3V4SignerType")
+
 
     AmazonS3ClientBuilder.standard()
       .withEndpointConfiguration(config.endpoint)
