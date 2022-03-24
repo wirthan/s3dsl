@@ -2,7 +2,6 @@ package s3dsl
 
 import java.time.ZonedDateTime
 import java.util.concurrent.Executors
-
 import S3Dsl._
 import s3dsl.domain.S3._
 import s3dsl.Gens._
@@ -39,7 +38,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
   )
 
   private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = interpreter(
+  private val s3 = withConfig(
     config,
     cs,
     Blocker.liftExecutionContext(ExecutionContext.fromExecutor(Executors.newCachedThreadPool))
@@ -140,7 +139,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         prop { (key: Key) =>
           val prog: TestProg[Unit] = bucketPath => s3.deleteObject(Path(bucketPath.bucket, key))
           withBucket(prog) should returnOk
-        }.set(maxSize = 2)
+        }
       }
     }
 
@@ -181,7 +180,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
           withBucket(prog) should returnOk
         }
-      }.set(maxSize = 3).setGen2(Gens.blobGen)
+      }.setGen2(Gens.blobGen)
     }
 
     // TODO: listObjectsWithCommonPrefixes
@@ -218,24 +217,69 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
     }
 
-    "copy object" should {
+    "copyObject" should {
 
       "succeed" in {
         prop { (src: Key, dest: Key, blob: String) =>
-          val prog: TestProg[(Boolean, Boolean)] = bucketPath => {
-            val bytes = blob.getBytes
+          val bytes = blob.getBytes
+
+          val prog: TestProg[Long] = bucketPath => {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
               _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
               _ <- s3.copyObject(srcPath, destPath)
-              srcExists <- s3.doesObjectExist(srcPath)
-              destExists <- s3.doesObjectExist(destPath)
+              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
-            } yield (srcExists, destExists)
+            } yield numBytes
           }
-          withBucket(prog) should returnValue((true, true))
-        }.set(maxSize = 5).setGen3(Gens.blobGen)
+          withBucket(prog) should returnValue{numBytes: Long =>
+            numBytes should be_==(bytes.length)
+          }
+        }.set(maxSize = 2).setGen3(Gens.blobGen)
+      }
+    }
+
+    "copyObjectMultipart" should {
+
+      "succeed for file < 5 MiB" in {
+        prop { (src: Key, dest: Key, blob: String) =>
+          val bytes = blob.getBytes
+
+          val prog: TestProg[Long] = bucketPath => {
+            val srcPath = Path(bucketPath.bucket, src)
+            val destPath = Path(bucketPath.bucket, dest)
+            for {
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- s3.copyObjectMultipart(srcPath, destPath, 1)
+              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
+              _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
+            } yield numBytes
+          }
+          withBucket(prog) should returnValue{ numBytes: Long =>
+            numBytes should be_==(bytes.length)
+          }
+        }.set(maxSize = 2).setGen3(Gens.blobGen)
+      }
+
+      "succeed for file > 5 MiB" in {
+        prop { (src: Key, dest: Key, c: Byte) =>
+          val bytes = Array.fill(6 * 1024 * 1024)(c)
+
+          val prog: TestProg[Long] = bucketPath => {
+            val srcPath = Path(bucketPath.bucket, src)
+            val destPath = Path(bucketPath.bucket, dest)
+            for {
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- s3.copyObjectMultipart(srcPath, destPath, 5 * 1024 * 1024)
+              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
+              _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
+            } yield numBytes
+          }
+          withBucket(prog) should returnValue{ numBytes: Long =>
+            numBytes should be_==(bytes.length)
+          }
+        }.set(maxSize = 1)
       }
     }
 

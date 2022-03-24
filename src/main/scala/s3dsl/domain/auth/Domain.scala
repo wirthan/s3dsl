@@ -195,7 +195,7 @@ object Domain {
       val map = set
         .map(p => p.provider.v -> p.id.v)
         .groupBy(_._1)
-        .mapValues(_.map(_._2).toList).toMap
+        .view.mapValues(_.map(_._2).toList).toMap
       map.asJson(mapEncoder): Json
     }
 
