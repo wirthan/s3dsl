@@ -98,11 +98,11 @@ object S3Dsl {
             )
 
             val permission: Permission = g.getPermission match {
-              case p if p.name === AwsPermission.FullControl.name => Permission.FullControl
-              case p if p.name === AwsPermission.Read.name => Permission.Read
-              case p if p.name === AwsPermission.ReadAcp.name => Permission.ReadAcp
-              case p if p.name === AwsPermission.Write.name => Permission.Write
-              case p if p.name === AwsPermission.WriteAcp.name => Permission.WriteAcp
+              case AwsPermission.FullControl => Permission.FullControl
+              case AwsPermission.Read=> Permission.Read
+              case AwsPermission.ReadAcp => Permission.ReadAcp
+              case AwsPermission.Write => Permission.Write
+              case AwsPermission.WriteAcp => Permission.WriteAcp
             }
 
             Grant(grantee, permission)
@@ -266,7 +266,7 @@ object S3Dsl {
         val tagging = new ObjectTagging(tags.value.map{case (k, v) => new Tag(k, v)}.toList.asJava)
         val request = new SetObjectTaggingRequest(path.bucket.value, path.key.value, tagging)
 
-        F.blocking(s3.setObjectTagging(request))
+        F.blocking(s3.setObjectTagging(request)).void
       }
     }
   }

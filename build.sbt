@@ -2,24 +2,24 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val scala2_13 = "2.13.6"
+val scala2_13 = "2.13.7"
 val scala2 = List(scala2_13)
 
 scalaVersion := scala2_13
 ThisBuild / crossScalaVersions := scala2
 
 val catsVersion       = "2.6.1"
-val catsEffectVersion = "2.5.1"
-val mouseVersion      = "1.0.4"
+val catsEffectVersion = "2.5.4"
+val mouseVersion      = "1.0.7"
 val circeVersion      = "0.14.1"
-val fs2Version        = "2.5.9"
-val refinedVersion    = "0.9.26"
+val fs2Version        = "2.5.10"
+val refinedVersion    = "0.9.27"
 val enumeratumVersion = "1.7.0"
 val specs2Version     = "4.11.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.105"
+val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.184"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
 
@@ -80,21 +80,14 @@ lazy val projectSettings = Seq(
     "-Ywarn-unused",
     //"-Xfatal-warnings"
   ),
-  libraryDependencies ++= {
+  Compile / scalacOptions ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n <= 12 =>
-        List(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
+      case Some((2, n)) if n <= 13 => List("-Ymacro-annotations")
       case _                       => Nil
     }
   },
-  Compile / scalacOptions ++= {
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n <= 12 => List("-Ypartial-unification", "-Yno-adapted-args", "-Ywarn-unused-import")
-      case _                       => List("-Ymacro-annotations")
-    }
-  },
-  wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.Any, Wart.Nothing, Wart.PublicInference),
-  wartremoverWarnings in (Test, test) ++= wartsInTest,
+  Compile / compile / wartremoverWarnings  ++= Warts.allBut(Wart.Any, Wart.Nothing, Wart.PublicInference),
+  Test / test / wartremoverWarnings  ++= wartsInTest,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
