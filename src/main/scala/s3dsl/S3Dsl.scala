@@ -229,12 +229,12 @@ object S3Dsl {
             TransferManagerBuilder
               .standard()
               .withS3Client(client)
-              .withMultipartCopyThreshold(5 * 1024 * 1024)
+              .withMultipartCopyThreshold(minPartSize)
               .withMultipartCopyPartSize(partSize)
               .withAlwaysCalculateMultipartMd5(true)
               .build
           )
-          _ <- F.delay(tm.copy(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value).waitForCompletion)
+          _ <- F.blocking(tm.copy(src.bucket.value, src.key.value, dest.bucket.value, dest.key.value).waitForCompletion)
         } yield ()
       }
 
