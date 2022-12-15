@@ -1,9 +1,8 @@
 package s3dsl
 
-import java.io.IOException
-import java.time.ZonedDateTime
 import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
+import collection.immutable._
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import com.amazonaws.services.s3.AmazonS3
@@ -11,11 +10,12 @@ import com.amazonaws.services.s3.model.{GetObjectTaggingRequest, ListObjectsRequ
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder
 import eu.timepit.refined.cats.syntax._
 import fs2.{Pipe, Stream}
+import java.io.IOException
+import java.time.ZonedDateTime
 import mouse.all._
 import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
 import scala.concurrent.duration.FiniteDuration
-import collection.immutable._
 
 trait S3Dsl[F[_]] {
 

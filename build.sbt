@@ -2,26 +2,26 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val scala2_13 = "2.13.7"
+val scala2_13 = "2.13.9"
 val scala2 = List(scala2_13)
 
 scalaVersion := scala2_13
 ThisBuild / crossScalaVersions := scala2
 
-val catsVersion       = "2.6.1"
-val catsEffectVersion = "2.5.4"
-val mouseVersion      = "1.0.7"
-val circeVersion      = "0.14.1"
-val fs2Version        = "2.5.10"
-val refinedVersion    = "0.9.27"
-val enumeratumVersion = "1.7.0"
-val specs2Version     = "4.11.0"
+val catsVersion       = "2.9.0"
+val catsEffectVersion = "3.4.2"
+val mouseVersion      = "1.2.1"
+val circeVersion      = "0.14.3"
+val fs2Version        = "3.4.0"
+val refinedVersion    = "0.10.1"
+val enumeratumVersion = "1.7.2"
+val specs2Version     = "4.19.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "com.amazonaws"%  "aws-java-sdk-s3" % "1.12.184"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.18.39"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
-val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.5.0"
+val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
 
 val refined = Seq(
@@ -55,7 +55,7 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
   "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0",
   "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
-  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.0",
+  "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.2",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")

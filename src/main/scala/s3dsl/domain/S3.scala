@@ -1,12 +1,12 @@
 package s3dsl.domain
 
-import com.amazonaws.services.s3.model.{Permission => AwsPermission}
-import com.amazonaws.{HttpMethod => AwsHttpMethod}
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{Enum, EnumEntry}
 import eu.timepit.refined.api._
 import io.estatico.newtype.macros.newtype
 import java.util.Date
+import software.amazon.awssdk.http.{SdkHttpMethod => AwsHttpMethod}
+import software.amazon.awssdk.services.s3.model.{Permission => AwsPermission}
 
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
@@ -84,11 +84,11 @@ object S3 {
     import s3dsl.domain.S3.Permission._
 
     private[s3dsl] lazy val aws: AwsPermission = fold(
-      fullControl = AwsPermission.FullControl,
-      read = AwsPermission.Read,
-      readAcp = AwsPermission.ReadAcp,
-      write = AwsPermission.Write,
-      writeAcp = AwsPermission.WriteAcp
+      fullControl = AwsPermission.FULL_CONTROL,
+      read = AwsPermission.READ,
+      readAcp = AwsPermission.READ_ACP,
+      write = AwsPermission.WRITE,
+      writeAcp = AwsPermission.WRITE_ACP
     )
 
     def fold[X](fullControl: => X, read: => X, readAcp: => X, write: => X, writeAcp: => X): X = this match {
