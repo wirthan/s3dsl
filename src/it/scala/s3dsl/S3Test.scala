@@ -1,55 +1,55 @@
 package s3dsl
 
-import java.time.ZonedDateTime
-import java.util.concurrent.Executors
-import S3Dsl._
+import cats.effect.unsafe.IORuntime
+import cats.instances.all._
+import cats.syntax.all._
+import enumeratum.scalacheck._
+import eu.timepit.refined.cats.syntax._
+import fs2.Stream
+import java.net.URI
+import java.time.Duration
+import org.specs2.execute.AsResult
+import org.specs2.matcher.IOMatchers
+import org.specs2.mutable.Specification
+import org.specs2.ScalaCheck
+import s3dsl.domain.auth.Domain
+import s3dsl.domain.auth.Domain._
+import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.S3._
 import s3dsl.Gens._
-import enumeratum.scalacheck._
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
-import eu.timepit.refined.cats.syntax._
-import org.specs2.mutable.Specification
-import fs2.Stream
-import org.specs2.ScalaCheck
-import org.specs2.matcher.IOMatchers
-
-import scala.concurrent.ExecutionContext
 import scala.util.Random
-import cats.syntax.all._
-import cats.instances.all._
-import org.specs2.execute.AsResult
-import s3dsl.domain.S3.HTTPMethod.GET
-import s3dsl.domain.auth.Domain
-import s3dsl.domain.auth.Domain.Principal.Provider
-import s3dsl.domain.auth.Domain._
-
-import scala.concurrent.duration.DurationInt
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
+import software.amazon.awssdk.services.s3.S3AsyncClient
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
-  import cats.effect.{IO, Blocker}
+  import cats.effect.IO
 
-  private val config = S3Config(
-    //creds = new BasicAWSCredentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"),
-    //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
-    creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
-    endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
-    connectionTTL = Some(5.minutes)
-  )
-
-  private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = withConfig(
-    config,
-    cs,
-    Blocker.liftExecutionContext(ExecutionContext.fromExecutor(Executors.newCachedThreadPool))
-  )(IO.ioConcurrentEffect(cs))
-  private implicit val par = IO.ioParallel(cs)
+  private implicit val runtime = IORuntime.global
+  private val s3 = S3Dsl
+    .interpreter[IO](
+      S3AsyncClient
+        .builder
+        .credentialsProvider(
+          StaticCredentialsProvider
+            .create(
+              AwsBasicCredentials
+                .create("minioadmin", "minioadmin")
+            )
+        )
+        .httpClientBuilder(NettyNioAsyncHttpClient.builder.connectionTimeToLive(Duration.ofMinutes(5)))
+        .endpointOverride(URI.create("http://localhost:9000"))
+        .build
+    )
 
   "Bucket" in {
 
     "listBuckets" should {
       "succeed" in {
-        withBucket(_ => s3.listBuckets) should returnValue { l: List[BucketName] => l should not(beEmpty)}
+        val io = withBucket(_ => s3.listBuckets)
+        io.unsafeRunSync()
+        io should returnValue { l: List[BucketName] => l should not(beEmpty)}
       }
     }
 
@@ -143,7 +143,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
     }
 
-    "putObject, doesObjectExist and deleteObject" should {
+    "putObject, getObjectMetadata and deleteObject" should {
 
       "succeed" in {
         prop { (key: Key, blob: String) =>
@@ -151,10 +151,10 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           val prog: TestProg[(Boolean, Boolean)] = bucketPath => for {
             path <- IO(Path(bucketPath.bucket, key))
             bytes = blob.getBytes
-            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, bytes.length.longValue)).compile.drain
-            exists1 <- s3.doesObjectExist(path)
+            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
+            exists1 <- s3.getObjectMetadata(path).map(_.isDefined)
             _ <- s3.deleteObject(path)
-            exists2 <- s3.doesObjectExist(path)
+            exists2 <- s3.getObjectMetadata(path).map(_.isDefined)
           } yield (exists1, exists2)
 
           withBucket(prog) should returnValue((true, false))
@@ -163,7 +163,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
     }
 
-    "putObjectWithHeaders" should {
+    "putObject" should {
 
       "succeed" in {
         prop { (key: Key, blob: String) =>
@@ -173,7 +173,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             path <- IO(Path(bucketPath.bucket, key))
             bytes = blob.getBytes
             _ <- Stream.emits(bytes).covary[IO].through(
-              s3.putObjectWithHeaders(path, bytes.length.longValue, headers)
+              s3.putObject(path, headers)
             ).compile.drain
             _ <- s3.deleteObject(path)
           } yield ()
@@ -193,7 +193,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         val prog: TestProg[List[ObjectSummary]] = bucketPath => for {
           _ <- keys.parTraverse(k =>
             Stream.emits(k.value.getBytes).covary[IO]
-              .through(s3.putObject(bucketPath.copy(key = k), k.value.getBytes.length.longValue))
+              .through(s3.putObject(bucketPath.copy(key = k), Nil))
               .compile.drain
           )
           list <- s3.listObjects(bucketPath).compile.toList
@@ -227,7 +227,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
               _ <- s3.copyObject(srcPath, destPath)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -250,7 +250,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 1)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -270,7 +270,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 5 * 1024 * 1024)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -293,7 +293,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
         val prog: TestProg[List[Byte]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
           content <- s3.getObject(path, 1024).compile.toList
           _ <- s3.deleteObject(path)
         } yield content
@@ -323,11 +323,10 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       "succeed" in {
         val key = Key("a/b/c.txt")
         val blob = "testtesttest"
-        val blobSize = blob.getBytes.length
 
         val prog: TestProg[Option[ObjectMetadata]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
           meta <- s3.getObjectMetadata(path)
           _ <- s3.deleteObject(path)
         } yield meta
@@ -354,12 +353,11 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       "succeed" in {
         val key = Key("a/b/c.txt")
         val blob = "testtesttest"
-        val blobSize = blob.getBytes.length
         val referenceTags = ObjectTags(Map("k1" -> "v1"))
 
         val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
           _ <- s3.setObjectTags(path, referenceTags)
           tags <- s3.getObjectTags(path)
           _ <- s3.deleteObject(path)
@@ -381,27 +379,6 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         }.set(maxSize = 5)
       }
 
-    }
-
-    "generatePresignedUrl" should {
-
-      "succeed" in {
-        prop { (path: Path, method: HTTPMethod) =>
-          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), method) should returnOk[URL]
-        }
-      }
-
-      "generate a url with a positive expiration" in {
-        prop { (path: Path) =>
-          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), GET) should returnWith { x =>
-            x.value.split("X-Amz-Expires=").toList
-              .drop(1)
-              .headOption should beSome { s: String =>
-              s must startWith("86")
-            }
-          }
-        }
-      }
     }
   }
 

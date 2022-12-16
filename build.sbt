@@ -19,7 +19,8 @@ val specs2Version     = "4.19.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.18.39"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.18.40"
+val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.18.40-PREVIEW"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
@@ -31,7 +32,8 @@ val refined = Seq(
 
 val fs2 = Seq(
   "co.fs2" %% "fs2-core",
-  "co.fs2" %% "fs2-io"
+  "co.fs2" %% "fs2-io",
+  "co.fs2" %% "fs2-reactive-streams",
 ).map(_ % fs2Version)
 
 val cats = Seq(
@@ -98,7 +100,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, newtype, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, awsS3TransferManager, newtype, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
   )
 
 //
