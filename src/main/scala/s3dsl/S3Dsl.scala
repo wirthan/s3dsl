@@ -30,6 +30,10 @@ import software.amazon.awssdk.services.s3.model.S3Object
 import software.amazon.awssdk.services.s3.model.Tag
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.transfer.s3.S3TransferManager
+import java.time.ZonedDateTime
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import java.time.Duration
 
 trait S3Dsl[F[_]] {
 
@@ -42,6 +46,7 @@ trait S3Dsl[F[_]] {
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
+  def generatePresignedGetObjectUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL
 
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   final def listObjects(path: Path): Stream[F, ObjectSummary] =
@@ -64,7 +69,7 @@ object S3Dsl {
 
   def interpreter[
   F[_] : Async
-  ](client: S3AsyncClient): S3Dsl[F]  = new S3Dsl[F] {
+  ](client: S3AsyncClient, presigner: S3Presigner): S3Dsl[F]  = new S3Dsl[F] {
 
     //
     // Bucket
@@ -121,12 +126,13 @@ object S3Dsl {
 
         AccessControlList(grants, owner)
       }
-
+      
       Async[F]
         .fromFuture(Sync[F].delay(client.getBucketAcl(_.bucket(name.value)).asScala))
         .map(fromAws)
         .map(_.some)
         .handle404(None)
+        
     }
 
     //
@@ -305,6 +311,29 @@ object S3Dsl {
           )
         )
         .void
+
+      override def generatePresignedGetObjectUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL = {
+
+        val request = 
+          GetObjectPresignRequest.builder()
+          .signatureDuration( Duration.between(ZonedDateTime.now(), expiration) )
+          .getObjectRequest(
+            GetObjectRequest.builder()
+            .bucket(path.bucket.value)
+            .key(path.key.value)
+            .build()
+          )
+          .build()
+        
+        
+
+        URL(
+          presigner
+          .presignGetObject(request)
+          .url()
+          .toString()
+        )
+      }
     }
 
   private def bucketNameOrErr(s: String): BucketName = BucketName.validate(s).fold(

@@ -22,25 +22,32 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
 import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import java.time.ZonedDateTime
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
   import cats.effect.IO
 
   private implicit val runtime = IORuntime.global
+  private val credentialProvider = StaticCredentialsProvider
+                                    .create(
+                                      AwsBasicCredentials
+                                        .create("minioadmin", "minioadmin")
+                                    )
+  private val endpointOverride = URI.create("http://localhost:9000")
   private val s3 = S3Dsl
     .interpreter[IO](
       S3AsyncClient
         .builder
-        .credentialsProvider(
-          StaticCredentialsProvider
-            .create(
-              AwsBasicCredentials
-                .create("minioadmin", "minioadmin")
-            )
-        )
+        .credentialsProvider(credentialProvider)
         .httpClientBuilder(NettyNioAsyncHttpClient.builder.connectionTimeToLive(Duration.ofMinutes(5)))
-        .endpointOverride(URI.create("http://localhost:9000"))
-        .build
+        .endpointOverride(endpointOverride)
+        .build,
+      S3Presigner
+        .builder()
+        .credentialsProvider(credentialProvider)
+        .endpointOverride(endpointOverride)
+        .build()
     )
 
   "Bucket" in {
@@ -377,6 +384,21 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
           withBucket(prog) should returnValue(Option.empty[ObjectTags])
         }.set(maxSize = 5)
+      }
+
+    }
+
+    "generatePresignedUrl" should {
+
+      "generate a url with a positive expiration" in {
+        prop { (path: Path) =>
+          val presignedUrl = s3.generatePresignedGetObjectUrl(path, ZonedDateTime.now.plusDays(1L), HTTPMethod.GET) 
+          presignedUrl.value.split("X-Amz-Expires=").toList
+          .drop(1)
+          .headOption should beSome { s: String =>
+            s must startWith("86")
+          }
+        }
       }
 
     }
