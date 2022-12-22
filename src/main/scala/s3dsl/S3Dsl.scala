@@ -3,24 +3,20 @@ package s3dsl
 import cats.effect.Async
 import cats.effect.kernel.Sync
 import cats.implicits._
-import collection.immutable._
 import eu.timepit.refined.cats.syntax._
+import fs2.Pipe
+import fs2.Stream
 import fs2.interop.reactivestreams
-import fs2.{Pipe, Stream}
 import io.circe.syntax._
-import java.io.InputStream
-import java.io.IOException
-import java.nio.ByteBuffer
-import java.util.Date
 import mouse.all._
 import org.reactivestreams.Publisher
-import s3dsl.domain.auth.Domain.{PolicyRead, PolicyWrite}
 import s3dsl.domain.S3._
-import scala.jdk.CollectionConverters._
-import scala.jdk.FutureConverters._
+import s3dsl.domain.auth.Domain.PolicyRead
+import s3dsl.domain.auth.Domain.PolicyWrite
+import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
-import software.amazon.awssdk.core.ResponseInputStream
+import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.GetBucketAclResponse
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectResponse
@@ -28,12 +24,16 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Object
 import software.amazon.awssdk.services.s3.model.Tag
-import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.transfer.s3.S3TransferManager
-import java.time.ZonedDateTime
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
-import software.amazon.awssdk.services.s3.presigner.S3Presigner
-import java.time.Duration
+
+import java.io.IOException
+import java.io.InputStream
+import java.nio.ByteBuffer
+import java.util.Date
+import scala.jdk.CollectionConverters._
+import scala.jdk.FutureConverters._
+
+import collection.immutable._
 
 trait S3Dsl[F[_]] {
 
@@ -45,8 +45,6 @@ trait S3Dsl[F[_]] {
   def getBucketAcl(bucket: BucketName): F[Option[AccessControlList]]
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
-
-  def generatePresignedDownloadtUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL
 
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   final def listObjects(path: Path): Stream[F, ObjectSummary] =
@@ -69,7 +67,7 @@ object S3Dsl {
 
   def interpreter[
   F[_] : Async
-  ](client: S3AsyncClient, presigner: S3Presigner): S3Dsl[F]  = new S3Dsl[F] {
+  ](client: S3AsyncClient): S3Dsl[F]  = new S3Dsl[F] {
 
     //
     // Bucket
@@ -311,27 +309,6 @@ object S3Dsl {
           )
         )
         .void
-
-    override def generatePresignedDownloadtUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL = {
-
-      val request = 
-        GetObjectPresignRequest.builder()
-        .signatureDuration( Duration.between(ZonedDateTime.now(), expiration) )
-        .getObjectRequest(
-          GetObjectRequest.builder()
-          .bucket(path.bucket.value)
-          .key(path.key.value)
-          .build()
-        )
-        .build()
-
-      URL(
-        presigner
-        .presignGetObject(request)
-        .url()
-        .toString()
-      )
-    }
   }
 
   private def bucketNameOrErr(s: String): BucketName = BucketName.validate(s).fold(
