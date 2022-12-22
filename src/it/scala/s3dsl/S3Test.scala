@@ -40,7 +40,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           )
         )
         .httpClientBuilder(NettyNioAsyncHttpClient.builder.connectionTimeToLive(Duration.ofMinutes(5)))
-        .endpointOverride(URI.create("http://localhost:9000"))
+        .endpointOverride(URI.create("http://127.0.0.1:9000"))
         .build
     )
 
@@ -234,7 +234,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withBucket(prog) should returnValue{numBytes: Long =>
+          withBucket(prog) should returnValue{ numBytes: Long =>
             numBytes should be_==(bytes.length)
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)

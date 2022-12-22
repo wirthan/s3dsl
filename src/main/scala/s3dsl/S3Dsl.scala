@@ -6,7 +6,7 @@ import cats.implicits._
 import eu.timepit.refined.cats.syntax._
 import fs2.Pipe
 import fs2.Stream
-import fs2.interop.reactivestreams
+import fs2.interop._
 import io.circe.syntax._
 import mouse.all._
 import org.reactivestreams.Publisher
@@ -218,14 +218,17 @@ object S3Dsl {
     override def putObject(path: Path,
                            headers: List[(String, String)]): Pipe[F, Byte, Unit] = fs2In =>
       Stream
-        .resource(reactivestreams.StreamUnicastPublisher(fs2In.chunks.map(chunks => ByteBuffer.wrap(chunks.toArray))))
-        .evalMap(putObj(path, headers))
+      .resource( reactivestreams.StreamUnicastPublisher(
+          fs2In.chunks.map(chunks => ByteBuffer.wrap(chunks.toArray)
+      )))
+      .evalMap(putObj(path, headers))
 
     override def copyObject(src: Path, dest: Path): F[Unit] = Async[F].fromFuture(
       Sync[F].delay(
-        client.copyObject(_
-          .bucket(src.bucket.value)
-          .key(src.key.value)
+        client.copyObject(
+          _
+          .sourceBucket(src.bucket.value)
+          .sourceKey(src.key.value)
           .destinationBucket(dest.bucket.value)
           .destinationKey(dest.key.value)
         ).asScala
@@ -243,9 +246,10 @@ object S3Dsl {
         Sync[F].delay(
           tm
             .copy(_
-              .copyObjectRequest(_
-                .bucket(src.bucket.value)
-                .key(src.key.value)
+              .copyObjectRequest(
+                _
+                .sourceBucket(src.bucket.value)
+                .sourceKey(src.key.value)
                 .destinationBucket(dest.bucket.value)
                 .destinationKey(dest.key.value)
               )
@@ -296,7 +300,8 @@ object S3Dsl {
         .fromFuture(
           Sync[F].delay(
             client
-              .putObjectTagging(_
+              .putObjectTagging(
+                _
                 .bucket(path.bucket.value)
                 .key(path.key.value)
                 .tagging(_
@@ -324,7 +329,7 @@ object S3Dsl {
     val etag = Option(aws.eTag).map(ETag.apply)
     val storClass = Option(aws.storageClass.name).map(StorageClass.apply)
     val lastModified = Option(aws.lastModified).map(Date.from).map(LastModified.apply)
-    ObjectSummary(path, aws.size, etag, storClass, lastModified)
+    ObjectSummary(path, aws.size.longValue(), etag, storClass, lastModified)
   }
 
   private def toMeta(aws: HeadObjectResponse): ObjectMetadata = {
@@ -334,6 +339,6 @@ object S3Dsl {
     val expiration = Option(aws.expires).map(Date.from).map(ExpirationTime.apply)
     val lastModified = Option(aws.lastModified).map(Date.from).map(LastModified.apply)
     val userMetadata = Option(aws.metadata.asScala.toMap).getOrElse(Map.empty[String, String])
-    ObjectMetadata(contentType, aws.contentLength, md5, etag, expiration, lastModified, userMetadata)
+    ObjectMetadata(contentType, aws.contentLength.longValue(), md5, etag, expiration, lastModified, userMetadata)
   }
 }
