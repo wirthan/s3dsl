@@ -46,7 +46,7 @@ trait S3Dsl[F[_]] {
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
-  def generatePresignedGetObjectUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL
+  def generatePresignedDownloadtUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL
 
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   final def listObjects(path: Path): Stream[F, ObjectSummary] =
@@ -312,29 +312,27 @@ object S3Dsl {
         )
         .void
 
-      override def generatePresignedGetObjectUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL = {
+    override def generatePresignedDownloadtUrl(path: Path, expiration: ZonedDateTime, method: HTTPMethod): URL = {
 
-        val request = 
-          GetObjectPresignRequest.builder()
-          .signatureDuration( Duration.between(ZonedDateTime.now(), expiration) )
-          .getObjectRequest(
-            GetObjectRequest.builder()
-            .bucket(path.bucket.value)
-            .key(path.key.value)
-            .build()
-          )
+      val request = 
+        GetObjectPresignRequest.builder()
+        .signatureDuration( Duration.between(ZonedDateTime.now(), expiration) )
+        .getObjectRequest(
+          GetObjectRequest.builder()
+          .bucket(path.bucket.value)
+          .key(path.key.value)
           .build()
-        
-        
-
-        URL(
-          presigner
-          .presignGetObject(request)
-          .url()
-          .toString()
         )
-      }
+        .build()
+
+      URL(
+        presigner
+        .presignGetObject(request)
+        .url()
+        .toString()
+      )
     }
+  }
 
   private def bucketNameOrErr(s: String): BucketName = BucketName.validate(s).fold(
     l => sys.error(s"Programming error in bucket name validation: ${l.show}"), identity

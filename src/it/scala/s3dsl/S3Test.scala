@@ -392,7 +392,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
       "generate a url with a positive expiration" in {
         prop { (path: Path) =>
-          val presignedUrl = s3.generatePresignedGetObjectUrl(path, ZonedDateTime.now.plusDays(1L), HTTPMethod.GET) 
+          val presignedUrl = s3.generatePresignedDownloadtUrl(path, ZonedDateTime.now.plusDays(1L), HTTPMethod.GET) 
           presignedUrl.value.split("X-Amz-Expires=").toList
           .drop(1)
           .headOption should beSome { s: String =>
