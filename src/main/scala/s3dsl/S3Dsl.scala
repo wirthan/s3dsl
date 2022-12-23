@@ -8,12 +8,9 @@ import fs2.Pipe
 import fs2.Stream
 import fs2.interop._
 import io.circe.syntax._
-import mouse.all._
-import org.reactivestreams.Publisher
 import s3dsl.domain.S3._
 import s3dsl.domain.auth.Domain.PolicyRead
 import s3dsl.domain.auth.Domain.PolicyWrite
-import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.services.s3.S3AsyncClient
@@ -26,14 +23,13 @@ import software.amazon.awssdk.services.s3.model.S3Object
 import software.amazon.awssdk.services.s3.model.Tag
 import software.amazon.awssdk.transfer.s3.S3TransferManager
 
-import java.io.IOException
-import java.io.InputStream
 import java.nio.ByteBuffer
 import java.util.Date
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 
 import collection.immutable._
+import cats.effect.kernel.Resource
 
 trait S3Dsl[F[_]] {
 
@@ -52,7 +48,7 @@ trait S3Dsl[F[_]] {
       case Left(a) => a
     }
   def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix]
-  def putObject(path: Path, headers: List[(String, String)]): Pipe[F, Byte, Unit]
+  def putObject(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
   def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit]
   def deleteObject(path: Path): F[Unit]
@@ -68,6 +64,8 @@ object S3Dsl {
   def interpreter[
   F[_] : Async
   ](client: S3AsyncClient): S3Dsl[F]  = new S3Dsl[F] {
+
+    private val maxTcpPayloadSize = 65535
 
     //
     // Bucket
@@ -158,71 +156,79 @@ object S3Dsl {
     // Object
     //
 
-    override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = {
-      def closeOrAbortJavaS3Stream[A](is: ResponseInputStream[A]): F[Unit] = for {
-        shouldAbort <- Async[F].blocking(is.available =!= 0).recover { case _: IOException => true }
-        _ <- Async[F].blocking(shouldAbort.fold(is.abort, is.close)).attempt.void
-      } yield ()
-
-      val acquire = Async[F]
-        .fromFuture(
+    override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = 
+      Stream.eval(
+        Async[F].fromFuture( 
           Sync[F].delay(
             client.getObject(
               GetObjectRequest.builder.bucket(path.bucket.value).key(path.key.value).build,
-              AsyncResponseTransformer.toBlockingInputStream[GetObjectResponse]
+              AsyncResponseTransformer.toPublisher[GetObjectResponse]
             ).asScala
           )
         )
-        .map(Option.apply)
-        .handle404(None)
-
-      val release: Option[ResponseInputStream[GetObjectResponse]] => F[Unit] = _.traverse_(obj => closeOrAbortJavaS3Stream(obj))
-
-      fs2.Stream
-        .bracket(acquire)(release)
-        .flatMap( _.traverse(s3Object =>
-          // s3Object.getObjectContent InputStream will be closed via fs2.Stream.bracket, that's why closeAfterUse = false
-            fs2.io.readInputStream[F](
-              Async[F].blocking[InputStream](s3Object), chunkSize, closeAfterUse = false
-            )
-          ).unNone
-        )
-    }
-
-    override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = Async[F]
-      .fromFuture(Sync[F].delay(client.headObject(_.bucket(path.bucket.value).key(path.key.value)).asScala))
+      )
+      .flatMap( s3request => fs2.interop.reactivestreams.fromPublisher(s3request,chunkSize) )
+      .flatMap( b => Stream.emits(b.array()) )
+      .map(Option.apply)
+      .handle404(None)
+      .unNone
+    
+    override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = 
+      Async[F].fromFuture(
+        Sync[F].delay(
+          client.headObject(_.bucket(path.bucket.value).key(path.key.value)
+        ).asScala)
+      )
       .map(toMeta)
       .map(_.some)
       .handle404(None)
 
     override def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix] =
-      Stream
-        .eval(Sync[F].delay(client.listObjectsV2Paginator(_.bucket(path.bucket.value).prefix(path.key.value).maxKeys(1000))))
-        .flatMap(reactivestreams.fromPublisher(_, 1000))
-        .evalMap(response =>
-          (
-            Sync[F].delay(response.contents.asScala.toList),
-            Sync[F]
-              .delay(response.commonPrefixes.asScala.toList)
-              .flatMap(_.traverse(p => Key.from(p.prefix).leftMap(new Exception(_) : Throwable).liftTo[F]))
-          )
-          .mapN((objects, commonPrefixes) =>
-            List(
-                objects.map(toSummary(_, path.bucket)).map(_.asLeft[CommonPrefix]),
-                commonPrefixes.map(CommonPrefix(_)).map(_.asRight[ObjectSummary])
-            ).combineAll
-          )
+      Stream.eval(
+        Sync[F].delay(
+          client.listObjectsV2Paginator(_.bucket(path.bucket.value).prefix(path.key.value).maxKeys(1000))
         )
-        .flatMap(Stream.emits)
+      )
+      .flatMap(reactivestreams.fromPublisher(_, 1000))
+      .evalMap(response =>
+        (
+          Sync[F].delay(response.contents.asScala.toList),
+          Sync[F].delay(response.commonPrefixes.asScala.toList)
+          .flatMap(_.traverse(p => Key.from(p.prefix).leftMap(new Exception(_) : Throwable).liftTo[F]))
+        )
+        .mapN((objects, commonPrefixes) =>
+          List(
+              objects.map(toSummary(_, path.bucket)).map(_.asLeft[CommonPrefix]),
+              commonPrefixes.map(CommonPrefix(_)).map(_.asRight[ObjectSummary])
+          ).combineAll
+        )
+      )
+      .flatMap(Stream.emits)
 
     override def putObject(path: Path,
-                           headers: List[(String, String)]): Pipe[F, Byte, Unit] = fs2In =>
-      Stream
-      .resource( reactivestreams.StreamUnicastPublisher(
-          fs2In.chunks.map(chunks => ByteBuffer.wrap(chunks.toArray)
-      )))
-      .evalMap(putObj(path, headers))
+                           contentLength: Long,
+                           headers: List[(String, String)]): Pipe[F, Byte, Unit] =  fs2In => {
 
+      lazy val req = PutObjectRequest
+        .builder
+        .bucket(path.bucket.value)
+        .key(path.key.value)
+        .metadata(headers.toMap.asJava)
+        .contentLength(contentLength)
+        .build
+
+      def createBody(s: Stream[F, Byte]): Resource[F, AsyncRequestBody] =
+        reactivestreams.StreamUnicastPublisher[F, ByteBuffer](
+          s.chunkN(maxTcpPayloadSize, true).map(chunks => ByteBuffer.wrap(chunks.toArray).position(0))
+        ).map(AsyncRequestBody.fromPublisher)
+
+      Stream.resource(createBody(fs2In))
+        .evalMap(body =>
+          Async[F].fromFuture(
+            Sync[F].delay(client.putObject(req, body).asScala)
+          )
+        ).void
+    }
     override def copyObject(src: Path, dest: Path): F[Unit] = Async[F].fromFuture(
       Sync[F].delay(
         client.copyObject(
@@ -268,22 +274,6 @@ object S3Dsl {
       )
       .void
       .handle404(())
-
-    private def putObj(path: Path, headers: List[(String, String)])
-                      (publisher: Publisher[ByteBuffer]): F[Unit] =
-      Async[F].fromFuture(
-        Sync[F].delay(
-          client.putObject(
-            PutObjectRequest
-              .builder
-              .bucket(path.bucket.value)
-              .key(path.key.value)
-              .metadata(headers.toMap.asJava)
-              .build,
-            AsyncRequestBody.fromPublisher(publisher)
-          ).asScala
-        )
-      ).void
 
     override def getObjectTags(path: Path): F[Option[ObjectTags]] =
       Async[F]

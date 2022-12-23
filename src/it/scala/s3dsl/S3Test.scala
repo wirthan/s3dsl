@@ -152,7 +152,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           val prog: TestProg[(Boolean, Boolean)] = bucketPath => for {
             path <- IO(Path(bucketPath.bucket, key))
             bytes = blob.getBytes
-            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
+            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, bytes.length.longValue, Nil)).compile.drain
             exists1 <- s3.getObjectMetadata(path).map(_.isDefined)
             _ <- s3.deleteObject(path)
             exists2 <- s3.getObjectMetadata(path).map(_.isDefined)
@@ -170,16 +170,20 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         prop { (key: Key, blob: String) =>
           val headers = List(("Content-Type", "text/plain"))
 
-          val prog: TestProg[Unit] = bucketPath => for {
+          val prog: TestProg[List[Byte]] = bucketPath => for {
             path <- IO(Path(bucketPath.bucket, key))
             bytes = blob.getBytes
             _ <- Stream.emits(bytes).covary[IO].through(
-              s3.putObject(path, headers)
+              s3.putObject(path, bytes.length.longValue, headers)
             ).compile.drain
+            obj <- s3.getObject(path,1028).compile.toList
             _ <- s3.deleteObject(path)
-          } yield ()
+          } yield obj
 
-          withBucket(prog) should returnOk
+          withBucket(prog) should returnValue{ bytes : List[Byte] =>
+            bytes should haveSize(blob.getBytes.length)
+          }
+
         }
       }.setGen2(Gens.blobGen)
     }
@@ -194,7 +198,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         val prog: TestProg[List[ObjectSummary]] = bucketPath => for {
           _ <- keys.parTraverse(k =>
             Stream.emits(k.value.getBytes).covary[IO]
-              .through(s3.putObject(bucketPath.copy(key = k), Nil))
+              .through(s3.putObject(bucketPath.copy(key = k), k.value.getBytes.length.longValue, Nil))
               .compile.drain
           )
           list <- s3.listObjects(bucketPath).compile.toList
@@ -228,7 +232,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
               _ <- s3.copyObject(srcPath, destPath)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -251,7 +255,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue(), Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 1)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -271,7 +275,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val srcPath = Path(bucketPath.bucket, src)
             val destPath = Path(bucketPath.bucket, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, Nil)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 5 * 1024 * 1024)
               numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
@@ -294,7 +298,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
         val prog: TestProg[List[Byte]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
           content <- s3.getObject(path, 1024).compile.toList
           _ <- s3.deleteObject(path)
         } yield content
@@ -327,7 +331,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
         val prog: TestProg[Option[ObjectMetadata]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
           meta <- s3.getObjectMetadata(path)
           _ <- s3.deleteObject(path)
         } yield meta
@@ -358,7 +362,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
         val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
           path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, Nil)).compile.drain
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
           _ <- s3.setObjectTags(path, referenceTags)
           tags <- s3.getObjectTags(path)
           _ <- s3.deleteObject(path)

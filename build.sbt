@@ -19,8 +19,8 @@ val specs2Version     = "4.19.0"
 
 val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.18.40"
-val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.18.40-PREVIEW"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.19.2"
+val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.19.2"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
