@@ -19,14 +19,13 @@ s3dsl provides a function that returns a [cats-effect](https://github.com/typele
 import s3dsl.S3Dsl._
 import s3dsl.domain.S3._
 
-val config = S3Config(
-  creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
-  endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
-  blockingEc = ExecutionContext.fromExecutor(Executors.newCachedThreadPool)
-)
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
 
-val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-val s3 = interpreter(config, cs)(IO.ioConcurrentEffect(cs))
+val asyncClient = S3AsyncClient.builder()...
+val presigner = S3Presigner.builder()...
+
+val s3 = interpreter(asyncClient, presigner)
 ```
 
 ### Use the interpreter

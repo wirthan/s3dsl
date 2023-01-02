@@ -3,8 +3,8 @@ package s3dsl.domain
 import java.nio.charset.StandardCharsets
 
 import eu.timepit.refined.api.Validate
-import com.amazonaws.services.s3.internal.BucketNameUtils
 import mouse.boolean._
+import software.amazon.awssdk.services.s3.internal.BucketUtils
 
 object refined extends s3dsl.domain.string
 
@@ -14,7 +14,7 @@ trait string {
 
   case object BucketName {
     implicit val bucketNameValidate: Validate.Plain[String, BucketName] = Validate.fromPredicate(
-      s => BucketNameUtils.isValidV2BucketName(s),
+      s => BucketUtils.isValidDnsBucketName(s, false),
       s => s"$s is a valid S3 bucket name",
       BucketName()
     )
