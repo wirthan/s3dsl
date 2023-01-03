@@ -2,17 +2,16 @@ package s3dsl
 
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
-import s3dsl.PresignDsl
 import s3dsl.domain.S3.Path
+import s3dsl.Presigner._
 import s3dsl.Gens._
+import cats.implicits._
 import org.specs2.matcher.ValidatedMatchers
-import java.net.URI
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
-import cats.effect.IO
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import java.time.ZonedDateTime
+import java.time.Duration
 import java.net.URL
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
@@ -26,126 +25,116 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
     S3Presigner
     .builder()
     .credentialsProvider(
-      StaticCredentialsProvider
-      .create( AwsBasicCredentials.create(
-          "minioadmin", 
-          "minioadmin"
-      ))
+      StaticCredentialsProvider.create(AwsBasicCredentials.create("minioadmin", "minioadmin"))
     )
-    .endpointOverride(URI.create("http://localhost:9000"))
     .build()
 
-  val interpreter = PresignDsl.interpreter[IO](presigner)
-  val expiration = ZonedDateTime.now.plusDays(1L)
+  val duration = Duration.ofHours(12)
 
   "Signing of Request" should {
 
     "generate an url with a positive expiration when signing a GET request" in {
 
       prop { (path: Path) =>
-        val request = GetObjectRequest.builder()
-                      .bucket(path.bucket.value)
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignGetObjectRequest(request,expiration)
+        val presignedUrl = GetObjectRequest.builder()
+          .bucket(path.bucket.value)
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
     "generate an url with a positive expiration when signing a PUT request" in {
 
       prop { (path: Path) =>
-        val request = PutObjectRequest.builder()
-                      .bucket(path.bucket.value)
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignPutObjectRequest(request,expiration)
+        val presignedUrl = PutObjectRequest.builder()
+          .bucket(path.bucket.value)
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
 
     "generate an url with a positive expiration when signing a Create Multipart Upload request" in {
 
       prop { (path: Path) =>
-        val request = CreateMultipartUploadRequest.builder()
-                      .bucket(path.bucket.value)
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignCreateMultipartUploadRequest(request,expiration)
+        val presignedUrl = CreateMultipartUploadRequest.builder()
+          .bucket(path.bucket.value)
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
     "generate an url with a positive expiration when signing a Upload Part request" in {
 
       prop { (path: Path) =>
-        val request = UploadPartRequest.builder()
-                      .bucket(path.bucket.value)
-                      .uploadId("testtesttest")
-                      .partNumber(1)
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignUploadPartRequest(request,expiration)
+        val presignedUrl = UploadPartRequest.builder()
+          .bucket(path.bucket.value)
+          .uploadId("testtesttest")
+          .partNumber(1)
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
     "generate an url with a positive expiration when signing a Complete Multipart Upload request" in {
 
       prop { (path: Path) =>
-        val request = CompleteMultipartUploadRequest.builder()
-                      .bucket(path.bucket.value)
-                      .uploadId("testtesttest")
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignCompleteMultipartUploadRequest(request,expiration)
+        val presignedUrl = CompleteMultipartUploadRequest.builder()
+          .bucket(path.bucket.value)
+          .uploadId("testtesttest")
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
     "generate an url with a positive expiration when signing a Abort Multipart Upload request" in {
 
       prop { (path: Path) =>
-        val request = AbortMultipartUploadRequest.builder()
-                      .bucket(path.bucket.value)
-                      .uploadId("testtesttest")
-                      .key(path.key.value)
-                      .build()
-        val presignedUrl = interpreter.presignAbortMultipartUploadRequest(request,expiration)
+        val presignedUrl = AbortMultipartUploadRequest.builder()
+          .bucket(path.bucket.value)
+          .uploadId("testtesttest")
+          .key(path.key.value)
+          .build()
+          .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { s: String =>
-          s must startWith("86")
+        extractExpiration(presignedUrl.url) should beSome { d: Long=>
+          d must between(duration.getSeconds - 1, duration.getSeconds)
         }
       }
-
     }
 
   }
 
-  private def extractExpiration(url: URL) = url.toString.split("X-Amz-Expires=")
-                                            .toList
-                                            .drop(1)
-                                            .headOption
+  private def extractExpiration(url: URL): Option[Long] =
+    url.getQuery.split("X-Amz-Expires=").toList
+      .tail
+      .headOption
+      .map(s => s.substring(0, s.indexOf("&")))
+      .flatMap(s => Either.catchNonFatal(java.lang.Long.parseLong(s)).toOption)
 
 }
