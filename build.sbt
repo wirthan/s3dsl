@@ -84,8 +84,11 @@ lazy val projectSettings = Seq(
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
 
+lazy val IntegrationTest = config("it") extend(Test)
+
 lazy val s3dsl = project.in(file("."))
   .configs(IntegrationTest)
+  .settings(Defaults.itSettings: _*)
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
