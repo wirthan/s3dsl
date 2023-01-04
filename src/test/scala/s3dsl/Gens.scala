@@ -4,8 +4,6 @@ import java.time.{Month, Year, ZoneId, ZonedDateTime}
 
 import cats.Applicative
 import org.scalacheck.cats.instances.GenInstances._
-
-import eu.timepit.refined.cats.syntax._
 import org.scalacheck.{Arbitrary, Gen}
 import s3dsl.domain.S3._
 import scala.jdk.CollectionConverters._
@@ -14,13 +12,9 @@ object Gens {
 
   val blobGen: Gen[String] = sizeLimitedString(512, 2048, Gen.alphaNumChar)
 
-  val bucketNameGen: Gen[BucketName] = sizeLimitedString(3, 63, Gen.alphaLowerChar).map(s =>
-    BucketName.validate(s).fold(_ => sys.error("error generating BucketName"), identity)
-  )
+  val bucketNameGen: Gen[BucketName] = sizeLimitedString(3, 63, Gen.alphaLowerChar).map(BucketName.apply)
 
-  val keyGen: Gen[Key] = sizeLimitedString(10, 30, Gen.alphaLowerChar).map(s =>
-    Key.validate(s).fold(_ => sys.error("error generating Key"), identity)
-  )
+  val keyGen: Gen[Key] = sizeLimitedString(10, 30, Gen.alphaLowerChar).map(Key.apply)
 
   val zonedDateTimeGen = for {
     (year, month) <- Applicative[Gen].tuple2(Gen.choose(-292278994, 292278994), Gen.choose(1, 12))

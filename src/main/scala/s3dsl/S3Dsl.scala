@@ -3,7 +3,6 @@ package s3dsl
 import cats.effect.Async
 import cats.effect.kernel.Sync
 import cats.implicits._
-import eu.timepit.refined.cats.syntax._
 import fs2.Pipe
 import fs2.Stream
 import fs2.interop._
@@ -14,40 +13,30 @@ import s3dsl.domain.auth.Domain.PolicyWrite
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.services.s3.S3AsyncClient
-import software.amazon.awssdk.services.s3.model.GetBucketAclResponse
-import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import software.amazon.awssdk.services.s3.model.GetObjectResponse
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import software.amazon.awssdk.services.s3.model.S3Object
-import software.amazon.awssdk.services.s3.model.Tag
+import software.amazon.awssdk.services.s3.model.{Bucket, CommonPrefix, GetBucketAclResponse, GetObjectRequest, GetObjectResponse, HeadObjectResponse, ListObjectsV2Request, PutObjectRequest, S3Object, Tag}
 import software.amazon.awssdk.transfer.s3.S3TransferManager
 
 import java.nio.ByteBuffer
-import java.util.Date
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
-
 import collection.immutable._
 import cats.effect.kernel.Resource
+import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Publisher
 
 trait S3Dsl[F[_]] {
 
   def createBucket(bucket: BucketName): F[Unit]
   def deleteBucket(bucket: BucketName): F[Unit]
   def doesBucketExist(bucket: BucketName): F[Boolean]
-  def listBuckets: F[List[BucketName]]
+  def listBuckets: F[List[Bucket]]
 
   def getBucketAcl(bucket: BucketName): F[Option[AccessControlList]]
   def getBucketPolicy(bucket: BucketName): F[Option[PolicyRead]]
   def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit]
 
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
-  final def listObjects(path: Path): Stream[F, ObjectSummary] =
-    listObjectsWithCommonPrefixes(path).collect {
-      case Left(a) => a
-    }
-  def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix]
+  def listObjects(bucketName: BucketName): Stream[F, S3Object]
+  def listObjectsWithCommonPrefixes(bucketName: BucketName, prefix: String): Stream[F, Either[S3Object, CommonPrefix]]
   def putObject(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
   def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit]
@@ -56,7 +45,7 @@ trait S3Dsl[F[_]] {
   def getObjectTags(path: Path): F[Option[ObjectTags]]
   def setObjectTags(path: Path, tags: ObjectTags): F[Unit]
 
-  def getObjectMetadata(path: Path): F[Option[ObjectMetadata]]
+  def headObject(path: Path): F[Option[HeadObjectResponse]]
 }
 
 object S3Dsl {
@@ -71,8 +60,9 @@ object S3Dsl {
     // Bucket
     //
 
-    override def doesBucketExist(name: BucketName): F[Boolean] =
-      listBuckets.map(_.contains(name))
+    override def doesBucketExist(name: BucketName): F[Boolean] = listBuckets
+      .map(_.map(_.name))
+      .map(_.contains_(name.value))
       // s3.doesBucketExistV2(name.value) does not work with minio
 
     override def createBucket(name: BucketName): F[Unit] = Async[F]
@@ -83,9 +73,9 @@ object S3Dsl {
       .fromFuture(Sync[F].delay(client.deleteBucket(_.bucket(name.value)).asScala))
       .void
 
-    override def listBuckets: F[List[BucketName]] = Async[F]
+    override def listBuckets: F[List[Bucket]] = Async[F]
       .fromFuture(Sync[F].delay(client.listBuckets.asScala))
-      .map(_.buckets.asScala.toList.map(b => bucketNameOrErr(b.name)))
+      .map(_.buckets.asScala.toList)
 
     //
     // Bucket ACL
@@ -161,7 +151,7 @@ object S3Dsl {
         Async[F].fromFuture( 
           Sync[F].delay(
             client.getObject(
-              GetObjectRequest.builder.bucket(path.bucket.value).key(path.key.value).build,
+              GetObjectRequest.builder.bucket(path.bucketName.value).key(path.key.value).build,
               AsyncResponseTransformer.toPublisher[GetObjectResponse]
             ).asScala
           )
@@ -173,37 +163,25 @@ object S3Dsl {
       .handle404(None)
       .unNone
     
-    override def getObjectMetadata(path: Path): F[Option[ObjectMetadata]] = 
+    override def headObject(path: Path): F[Option[HeadObjectResponse]] = {
       Async[F].fromFuture(
         Sync[F].delay(
-          client.headObject(_.bucket(path.bucket.value).key(path.key.value)
+          client.headObject(_.bucket(path.bucketName.value).key(path.key.value)
         ).asScala)
       )
-      .map(toMeta)
       .map(_.some)
       .handle404(None)
+    }
 
-    override def listObjectsWithCommonPrefixes(path: Path): Stream[F, ObjectSummary Either CommonPrefix] =
-      Stream.eval(
-        Sync[F].delay(
-          client.listObjectsV2Paginator(_.bucket(path.bucket.value).prefix(path.key.value).maxKeys(1000))
-        )
-      )
-      .flatMap(reactivestreams.fromPublisher(_, 1000))
-      .evalMap(response =>
-        (
-          Sync[F].delay(response.contents.asScala.toList),
-          Sync[F].delay(response.commonPrefixes.asScala.toList)
-          .flatMap(_.traverse(p => Key.from(p.prefix).leftMap(new Exception(_) : Throwable).liftTo[F]))
-        )
-        .mapN((objects, commonPrefixes) =>
-          List(
-              objects.map(toSummary(_, path.bucket)).map(_.asLeft[CommonPrefix]),
-              commonPrefixes.map(CommonPrefix(_)).map(_.asRight[ObjectSummary])
-          ).combineAll
-        )
-      )
-      .flatMap(Stream.emits)
+    override def listObjects(bucketName: BucketName): Stream[F, S3Object] = {
+      val req = ListObjectsV2Request.builder().bucket(bucketName.value).build
+      listS3Objects(req).map(_.fold(_.some, _ => Option.empty[S3Object])).unNone
+    }
+
+    override def listObjectsWithCommonPrefixes(bucketName: BucketName, prefix: String): Stream[F, Either[S3Object, CommonPrefix]] = {
+      val req = ListObjectsV2Request.builder().bucket(bucketName.value).prefix(prefix).build
+      listS3Objects(req)
+    }
 
     override def putObject(path: Path,
                            contentLength: Long,
@@ -211,7 +189,7 @@ object S3Dsl {
 
       lazy val req = PutObjectRequest
         .builder
-        .bucket(path.bucket.value)
+        .bucket(path.bucketName.value)
         .key(path.key.value)
         .metadata(headers.toMap.asJava)
         .contentLength(contentLength)
@@ -233,9 +211,9 @@ object S3Dsl {
       Sync[F].delay(
         client.copyObject(
           _
-          .sourceBucket(src.bucket.value)
+          .sourceBucket(src.bucketName.value)
           .sourceKey(src.key.value)
-          .destinationBucket(dest.bucket.value)
+          .destinationBucket(dest.bucketName.value)
           .destinationKey(dest.key.value)
         ).asScala
       )
@@ -254,9 +232,9 @@ object S3Dsl {
             .copy(_
               .copyObjectRequest(
                 _
-                .sourceBucket(src.bucket.value)
+                .sourceBucket(src.bucketName.value)
                 .sourceKey(src.key.value)
-                .destinationBucket(dest.bucket.value)
+                .destinationBucket(dest.bucketName.value)
                 .destinationKey(dest.key.value)
               )
             )
@@ -269,7 +247,7 @@ object S3Dsl {
     override def deleteObject(path: Path): F[Unit] = Async[F]
       .fromFuture(
         Sync[F].delay(
-          client.deleteObject(_.bucket(path.bucket.value).key(path.key.value)).asScala
+          client.deleteObject(_.bucket(path.bucketName.value).key(path.key.value)).asScala
         )
       )
       .void
@@ -278,10 +256,10 @@ object S3Dsl {
     override def getObjectTags(path: Path): F[Option[ObjectTags]] =
       Async[F]
         .fromFuture(
-          Sync[F].delay(client.getObjectTagging(_.bucket(path.bucket.value).key(path.key.value)).asScala)
+          Sync[F].delay(client.getObjectTagging(_.bucket(path.bucketName.value).key(path.key.value)).asScala)
         )
         .map(_.tagSet.asScala.map(t => t.key -> t.value).toMap)
-        .map(ObjectTags)
+        .map(ObjectTags.apply)
         .map(Option.apply)
         .handle404(None)
 
@@ -292,7 +270,7 @@ object S3Dsl {
             client
               .putObjectTagging(
                 _
-                .bucket(path.bucket.value)
+                .bucket(path.bucketName.value)
                 .key(path.key.value)
                 .tagging(_
                   .tagSet(
@@ -304,31 +282,25 @@ object S3Dsl {
           )
         )
         .void
+
+    private def listS3Objects(req: ListObjectsV2Request): Stream[F, Either[S3Object, CommonPrefix]] =
+      Stream.eval(
+        Sync[F].delay[ListObjectsV2Publisher](client.listObjectsV2Paginator(req))
+      )
+        .flatMap(reactivestreams.fromPublisher(_, 1000))
+        .evalMap(response =>
+          (
+            Sync[F].delay(response.contents.asScala.toList),
+            Sync[F].delay(response.commonPrefixes.asScala.toList)
+          )
+            .mapN((objects, commonPrefixes) =>
+              List(
+                objects.map(_.asLeft[CommonPrefix]),
+                commonPrefixes.map(_.asRight[S3Object])
+              ).combineAll
+            )
+        )
+        .flatMap(Stream.emits)
   }
 
-  private def bucketNameOrErr(s: String): BucketName = BucketName.validate(s).fold(
-    l => sys.error(s"Programming error in bucket name validation: ${l.show}"), identity
-  )
-
-  private def keyOrErr(s: String): Key = Key.validate(s).fold(
-    l => sys.error(s"Programming error in s3 key validation: ${l.show}"), identity
-  )
-
-  private def toSummary(aws: S3Object, bucketName: BucketName): ObjectSummary = {
-    val path = Path(bucketNameOrErr(bucketName.value), keyOrErr(aws.key))
-    val etag = Option(aws.eTag).map(ETag.apply)
-    val storClass = Option(aws.storageClass.name).map(StorageClass.apply)
-    val lastModified = Option(aws.lastModified).map(Date.from).map(LastModified.apply)
-    ObjectSummary(path, aws.size.longValue(), etag, storClass, lastModified)
-  }
-
-  private def toMeta(aws: HeadObjectResponse): ObjectMetadata = {
-    val contentType = Option(aws.contentEncoding).map(ContentType.apply)
-    val md5 = Option(aws.sseCustomerKeyMD5).map(MD5.apply)
-    val etag = Option(aws.eTag).map(ETag.apply)
-    val expiration = Option(aws.expires).map(Date.from).map(ExpirationTime.apply)
-    val lastModified = Option(aws.lastModified).map(Date.from).map(LastModified.apply)
-    val userMetadata = Option(aws.metadata.asScala.toMap).getOrElse(Map.empty[String, String])
-    ObjectMetadata(contentType, aws.contentLength.longValue(), md5, etag, expiration, lastModified, userMetadata)
-  }
 }

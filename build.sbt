@@ -13,22 +13,13 @@ val catsEffectVersion = "3.4.2"
 val mouseVersion      = "1.2.1"
 val circeVersion      = "0.14.3"
 val fs2Version        = "3.4.0"
-val refinedVersion    = "0.10.1"
 val enumeratumVersion = "1.7.2"
 val specs2Version     = "4.19.0"
-
-val newtype    = "io.estatico"  %% "newtype"         % "0.4.4"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
 val awsS3      = "software.amazon.awssdk" % "s3" % "2.19.2"
 val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.19.2"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
-
-
-val refined = Seq(
-  "eu.timepit" %% "refined",
-  "eu.timepit" %% "refined-cats"
-).map(_ % refinedVersion)
 
 val fs2 = Seq(
   "co.fs2" %% "fs2-core",
@@ -47,7 +38,6 @@ val circe = Seq(
   "io.circe"     %% "circe-generic"        % circeVersion,
   "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
-  "io.circe"     %% "circe-refined"        % circeVersion,
   "com.beachape" %% "enumeratum-circe"     % enumeratumVersion,
 )
 
@@ -56,13 +46,12 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
   "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0",
-  "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion,
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.2",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
 ).map(_ % "test,it")
 
-lazy val wartsInTest = Warts.allBut(
+lazy val warts = Warts.allBut(
   Wart.Any,
   Wart.Nothing,
   Wart.NonUnitStatements,
@@ -89,8 +78,8 @@ lazy val projectSettings = Seq(
       case _                       => Nil
     }
   },
-  Compile / compile / wartremoverWarnings  ++= Warts.allBut(Wart.Any, Wart.Nothing, Wart.PublicInference),
-  Test / test / wartremoverWarnings  ++= wartsInTest,
+  Compile / compile / wartremoverWarnings  := warts,
+  Test / test / wartremoverWarnings  := warts,
 
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
@@ -100,7 +89,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, awsS3TransferManager, newtype, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ refined ++ testDeps
+    libraryDependencies ++= Seq(awsS3, awsS3TransferManager, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ testDeps
   )
 
 //

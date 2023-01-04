@@ -11,13 +11,13 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import java.time.Duration
 import java.net.URL
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest
 import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest
+import scala.concurrent.duration._
 
 object PresignTest extends Specification with ValidatedMatchers with ScalaCheck {
   
@@ -29,7 +29,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
     )
     .build()
 
-  val duration = Duration.ofHours(12)
+  val duration = 12.hours
 
   "Signing of Request" should {
 
@@ -37,13 +37,13 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = GetObjectRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .key(path.key.value)
           .build()
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long =>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }
@@ -52,13 +52,13 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = PutObjectRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .key(path.key.value)
           .build()
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long =>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }
@@ -68,13 +68,13 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = CreateMultipartUploadRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .key(path.key.value)
           .build()
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long =>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }
@@ -83,7 +83,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = UploadPartRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .uploadId("testtesttest")
           .partNumber(1)
           .key(path.key.value)
@@ -91,7 +91,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long =>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }
@@ -100,14 +100,14 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = CompleteMultipartUploadRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .uploadId("testtesttest")
           .key(path.key.value)
           .build()
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long =>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }
@@ -116,14 +116,14 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
 
       prop { (path: Path) =>
         val presignedUrl = AbortMultipartUploadRequest.builder()
-          .bucket(path.bucket.value)
+          .bucket(path.bucketName.value)
           .uploadId("testtesttest")
           .key(path.key.value)
           .build()
           .presign(presigner, duration)
         
         extractExpiration(presignedUrl.url) should beSome { d: Long=>
-          d must between(duration.getSeconds - 1, duration.getSeconds)
+          d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
     }

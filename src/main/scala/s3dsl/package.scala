@@ -12,9 +12,9 @@ package object s3dsl {
             case e: S3Exception =>
               e.statusCode match {
                 case 404 => ApplicativeError[F, Throwable].pure(on404)
-                case _ => println("no matchhhhhhhh"); ApplicativeError[F, Throwable].raiseError(e)
+                case _ => ApplicativeError[F, Throwable].raiseError(e)
               }
-            case e => println(s"DAMN, faced another exception than expected: ${e.toString()}"); ApplicativeError[F, Throwable].raiseError(e)
+            case e => ApplicativeError[F, Throwable].raiseError(e)
         }
       }
   }
