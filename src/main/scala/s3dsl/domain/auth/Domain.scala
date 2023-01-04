@@ -7,7 +7,6 @@ import mouse.boolean._
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
 import io.circe.syntax._
-import io.estatico.newtype.macros.newtype
 
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
@@ -26,12 +25,12 @@ object Domain {
   sealed trait Policy
   object Policy {
 
-    @newtype final case class Version(value: String)
+    final case class Version(value: String) extends AnyVal
     object Version {
       lazy val defaultVersion: Version = Version("2012-10-17")
-      implicit lazy val eq: Eq[Version] = deriving
-      implicit lazy val encoder: Encoder[Version] = deriving
-      implicit lazy val decoder: Decoder[Version] = deriving
+      implicit lazy val eq: Eq[Version] = Eq.fromUniversalEquals
+      implicit lazy val encoder: Encoder[Version] = Encoder[String].contramap(_.value)
+      implicit lazy val decoder: Decoder[Version] = Decoder[String].map(Version.apply)
     }
   }
 
@@ -130,11 +129,11 @@ object Domain {
   // Resource
   //
 
-  @newtype final case class Resource(v: String)
+  final case class Resource(v: String) extends AnyVal
   object Resource {
-    implicit lazy val order: Order[Resource] = deriving
-    implicit lazy val encoder: Encoder[Resource] = deriving
-    implicit lazy val decoder: Decoder[Resource] = deriving
+    implicit lazy val order: Order[Resource] = Order[String].contramap(_.v)
+    implicit lazy val encoder: Encoder[Resource] = Encoder[String].contramap(_.v)
+    implicit lazy val decoder: Decoder[Resource] = Decoder[String].map(Resource.apply)
   }
 
   //
@@ -206,19 +205,19 @@ object Domain {
       ).toSet
     )
 
-    @newtype final case class Id(v: String)
+    final case class Id(v: String) extends AnyVal
     object Id {
-      implicit lazy val order: Order[Id] = deriving
-      implicit lazy val encoder: Encoder[Id] = deriving
-      implicit lazy val decoder: Decoder[Id] = deriving
+      implicit lazy val order: Order[Id] = Order[String].contramap(_.v)
+      implicit lazy val encoder: Encoder[Id] = Encoder[String].contramap(_.v)
+      implicit lazy val decoder: Decoder[Id] = Decoder[String].map(Id.apply)
       lazy val all: Id = Id("*")
     }
 
-    @newtype final case class Provider(v: String)
+    final case class Provider(v: String) extends AnyVal
     object Provider {
-      implicit lazy val order: Order[Provider] = deriving
-      implicit lazy val encoder: Encoder[Provider] = deriving
-      implicit lazy val decoder: Decoder[Provider] = deriving
+      implicit lazy val order: Order[Provider] = Order[String].contramap(_.v)
+      implicit lazy val encoder: Encoder[Provider] = Encoder[String].contramap(_.v)
+      implicit lazy val decoder: Decoder[Provider] = Decoder[String].map(Provider.apply)
       lazy val all: Provider = Provider("*")
       lazy val aws: Provider = Provider("AWS")
     }

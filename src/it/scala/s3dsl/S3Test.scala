@@ -1,55 +1,56 @@
 package s3dsl
 
-import java.time.ZonedDateTime
-import java.util.concurrent.Executors
-import S3Dsl._
+import cats.instances.all._
+import cats.syntax.all._
+import enumeratum.scalacheck._
+import fs2.Stream
+
+import java.net.URI
+import java.time.Duration
+import org.specs2.execute.AsResult
+import org.specs2.matcher.IOMatchers
+import org.specs2.mutable.Specification
+import org.specs2.ScalaCheck
+import s3dsl.domain.auth.Domain
+import s3dsl.domain.auth.Domain._
+import s3dsl.domain.auth.Domain.Principal.Provider
 import s3dsl.domain.S3._
 import s3dsl.Gens._
-import enumeratum.scalacheck._
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
-import eu.timepit.refined.cats.syntax._
-import org.specs2.mutable.Specification
-import fs2.Stream
-import org.specs2.ScalaCheck
-import org.specs2.matcher.IOMatchers
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.{Bucket, CommonPrefix, HeadObjectResponse, S3Object}
 
-import scala.concurrent.ExecutionContext
-import scala.util.Random
-import cats.syntax.all._
-import cats.instances.all._
-import org.specs2.execute.AsResult
-import s3dsl.domain.S3.HTTPMethod.GET
-import s3dsl.domain.auth.Domain
-import s3dsl.domain.auth.Domain.Principal.Provider
-import s3dsl.domain.auth.Domain._
-
-import scala.concurrent.duration.DurationInt
+import java.util.UUID
 
 object S3Test extends Specification with ScalaCheck with IOMatchers {
-  import cats.effect.{IO, Blocker}
+  import cats.effect.IO
 
-  private val config = S3Config(
-    //creds = new BasicAWSCredentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"),
-    //endpoint = new EndpointConfiguration("https://play.minio.io:9000", "us-east-1"),
-    creds = new BasicAWSCredentials("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF"),
-    endpoint = new EndpointConfiguration("http://localhost:9000", "us-east-1"),
-    connectionTTL = Some(5.minutes)
-  )
-
-  private val cs = IO.contextShift(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(3)))
-  private val s3 = withConfig(
-    config,
-    cs,
-    Blocker.liftExecutionContext(ExecutionContext.fromExecutor(Executors.newCachedThreadPool))
-  )(IO.ioConcurrentEffect(cs))
-  private implicit val par = IO.ioParallel(cs)
+  private val s3 = S3Dsl
+    .interpreter[IO](
+      S3AsyncClient
+        .builder
+        .credentialsProvider(
+          StaticCredentialsProvider
+          .create(
+            AwsBasicCredentials
+              .create("BQKN8G6V2DQ83DH3AHPN", "GPD7MUZqy6XGtTz7h2QPyJbggGkQfigwDnaJNrgF")
+          )
+        )
+        .httpClientBuilder(NettyNioAsyncHttpClient.builder.connectionTimeToLive(Duration.ofMinutes(5)))
+        .endpointOverride(URI.create("http://127.0.0.1:9000"))
+        .build
+    )
 
   "Bucket" in {
 
     "listBuckets" should {
       "succeed" in {
-        withBucket(_ => s3.listBuckets) should returnValue { l: List[BucketName] => l should not(beEmpty)}
+        val buckets = withRandomBucket(_ => s3.listBuckets)
+        buckets should returnValue { l: List[Bucket] =>
+          l should not(beEmpty)
+        }
       }
     }
 
@@ -57,7 +58,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
       "succeed" in {
         val prog = for {
-          name <- bucketName
+          name <- randomBucketName
           _ <- s3.createBucket(name)
           exists1 <- s3.doesBucketExist(name)
           _ <- s3.deleteBucket(name)
@@ -119,9 +120,9 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             )
           )
 
-          val prog: TestProg[Option[PolicyRead]] = bucketPath => for {
-            _ <- s3.setBucketPolicy(bucketPath.bucket, policyWrite)
-            policyRead <- s3.getBucketPolicy(bucketPath.bucket)
+          val prog: TestProg[Option[PolicyRead]] = bucketName => for {
+            _ <- s3.setBucketPolicy(bucketName, policyWrite)
+            policyRead <- s3.getBucketPolicy(bucketName)
           } yield policyRead
 
           withBucket(bn, prog) should returnValue{ policy: Option[PolicyRead] =>
@@ -137,104 +138,108 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "delete" should {
       "succeed if an object does not exist" in {
         prop { (key: Key) =>
-          val prog: TestProg[Unit] = bucketPath => s3.deleteObject(Path(bucketPath.bucket, key))
-          withBucket(prog) should returnOk
+          val prog: TestProg[Unit] = bucketName => s3.deleteObject(Path(bucketName, key))
+          withRandomBucket(prog) should returnOk
         }
       }
     }
 
-    "putObject, doesObjectExist and deleteObject" should {
+    "putObject, getObjectMetadata and deleteObject" should {
 
       "succeed" in {
         prop { (key: Key, blob: String) =>
 
-          val prog: TestProg[(Boolean, Boolean)] = bucketPath => for {
-            path <- IO(Path(bucketPath.bucket, key))
+          val prog: TestProg[(Boolean, Boolean)] = bucketName => for {
+            path <- IO(Path(bucketName, key))
             bytes = blob.getBytes
-            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, bytes.length.longValue)).compile.drain
-            exists1 <- s3.doesObjectExist(path)
+            _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(path, bytes.length.longValue, Nil)).compile.drain
+            exists1 <- s3.headObject(path).map(_.isDefined)
             _ <- s3.deleteObject(path)
-            exists2 <- s3.doesObjectExist(path)
+            exists2 <- s3.headObject(path).map(_.isDefined)
           } yield (exists1, exists2)
 
-          withBucket(prog) should returnValue((true, false))
+          withRandomBucket(prog) should returnValue((true, false))
         }
       }.set(maxSize = 5).setGen2(Gens.blobGen)
 
     }
 
-    "putObjectWithHeaders" should {
+    "putObject" should {
 
       "succeed" in {
         prop { (key: Key, blob: String) =>
           val headers = List(("Content-Type", "text/plain"))
 
-          val prog: TestProg[Unit] = bucketPath => for {
-            path <- IO(Path(bucketPath.bucket, key))
+          val prog: TestProg[List[Byte]] = bucketName => for {
+            path <- IO(Path(bucketName, key))
             bytes = blob.getBytes
             _ <- Stream.emits(bytes).covary[IO].through(
-              s3.putObjectWithHeaders(path, bytes.length.longValue, headers)
+              s3.putObject(path, bytes.length.longValue, headers)
             ).compile.drain
+            obj <- s3.getObject(path, 1028).compile.toList
             _ <- s3.deleteObject(path)
-          } yield ()
+          } yield obj
 
-          withBucket(prog) should returnOk
+          withRandomBucket(prog) should returnValue{ bytes : List[Byte] =>
+            bytes should haveSize(blob.getBytes.length)
+          }
+
         }
       }.setGen2(Gens.blobGen)
     }
 
     // TODO: listObjectsWithCommonPrefixes
 
-    "listObjects" should {
+    "listObjects / listObjectsWithCommonPrefixes" should {
 
       "succeed" in {
         val keys = List(Key("a.txt"), Key("b.txt"), Key("c.txt"))
 
-        val prog: TestProg[List[ObjectSummary]] = bucketPath => for {
+        val prog: TestProg[List[S3Object]] = bucketName=> for {
           _ <- keys.parTraverse(k =>
             Stream.emits(k.value.getBytes).covary[IO]
-              .through(s3.putObject(bucketPath.copy(key = k), k.value.getBytes.length.longValue))
+              .through(s3.putObject(bucketName.path(k), k.value.getBytes.length.longValue, Nil))
               .compile.drain
           )
-          list <- s3.listObjects(bucketPath).compile.toList
-          _ <- list.traverse(os => s3.deleteObject(os.path))
+          list <- s3.listObjects(bucketName).compile.toList
+          _ <- list
+            .traverse(obj => s3.deleteObject(bucketName.path(Key(obj.key))))
         } yield list
 
-        withBucket(prog) should returnValue{(l: List[ObjectSummary]) =>
-          l.map(_.path.key) should be_==(keys)
+        withRandomBucket(prog) should returnValue{(l: List[S3Object]) =>
+          l.map(obj => Key(obj.key)) should be_==(keys)
         }
       }
 
-      "return an empty stream for a path that does not exist" in {
+      "return an empty stream for a prefix that does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[List[ObjectSummary]] = bucketPath =>
-            s3.listObjects(Path(bucketPath.bucket, key)).compile.toList
-          withBucket(prog) should returnValue{(l: List[ObjectSummary]) =>
+          val prog: TestProg[List[Either[S3Object, CommonPrefix]]] = bucketName =>
+            s3.listObjectsWithCommonPrefixes(bucketName, key.value).compile.toList
+          withRandomBucket(prog) should returnValue{(l: List[Either[S3Object, CommonPrefix]]) =>
             l should beEmpty
           }
         }.set(maxSize = 2)
       }
 
     }
-
     "copyObject" should {
 
       "succeed" in {
         prop { (src: Key, dest: Key, blob: String) =>
           val bytes = blob.getBytes
 
-          val prog: TestProg[Long] = bucketPath => {
-            val srcPath = Path(bucketPath.bucket, src)
-            val destPath = Path(bucketPath.bucket, dest)
+          val prog: TestProg[Option[Long]] = bucketName => {
+            val srcPath = Path(bucketName, src)
+            val destPath = Path(bucketName, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
               _ <- s3.copyObject(srcPath, destPath)
-              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
+              numBytes <- s3.headObject(destPath).map(_.map(_.contentLength.longValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withBucket(prog) should returnValue{numBytes: Long =>
-            numBytes should be_==(bytes.length)
+          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+            numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)
       }
@@ -246,18 +251,18 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         prop { (src: Key, dest: Key, blob: String) =>
           val bytes = blob.getBytes
 
-          val prog: TestProg[Long] = bucketPath => {
-            val srcPath = Path(bucketPath.bucket, src)
-            val destPath = Path(bucketPath.bucket, dest)
+          val prog: TestProg[Option[Long]] = bucketName => {
+            val srcPath = Path(bucketName, src)
+            val destPath = Path(bucketName, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 1)
-              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
+              numBytes <- s3.headObject(destPath).map(_.map(_.contentLength.longValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withBucket(prog) should returnValue{ numBytes: Long =>
-            numBytes should be_==(bytes.length)
+          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+            numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)
       }
@@ -266,18 +271,18 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         prop { (src: Key, dest: Key, c: Byte) =>
           val bytes = Array.fill(6 * 1024 * 1024)(c)
 
-          val prog: TestProg[Long] = bucketPath => {
-            val srcPath = Path(bucketPath.bucket, src)
-            val destPath = Path(bucketPath.bucket, dest)
+          val prog: TestProg[Option[Long]] = bucketName => {
+            val srcPath = Path(bucketName, src)
+            val destPath = Path(bucketName, dest)
             for {
-              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue)).compile.drain
+              _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
               _ <- s3.copyObjectMultipart(srcPath, destPath, 5 * 1024 * 1024)
-              numBytes <- s3.getObjectMetadata(destPath).map(_.map(_.contentLength).getOrElse(Long.MinValue))
+              numBytes <- s3.headObject(destPath).map(_.map(_.contentLength.longValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withBucket(prog) should returnValue{ numBytes: Long =>
-            numBytes should be_==(bytes.length)
+          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+            numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 1)
       }
@@ -291,26 +296,28 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
         val blob = "testtesttest"
         val blobSize = blob.getBytes.length
 
-        val prog: TestProg[List[Byte]] = bucketPath => for {
-          path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
-          content <- s3.getObject(path, 1024).compile.toList
-          _ <- s3.deleteObject(path)
-        } yield content
+        val prog: TestProg[List[Byte]] = bucketName => {
+          val path = bucketName.path(key)
+          for {
+            _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
+            content <- s3.getObject(path, 1024).compile.toList
+            _ <- s3.deleteObject(path)
+          } yield content
+        }
 
-        withBucket(prog) should returnValue { content: List[Byte] =>
+        withRandomBucket(prog) should returnValue { content: List[Byte] =>
           content should haveSize(blobSize)
         }
       }
 
       "return Empty Stream if Object does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[Boolean] = bucketPath => for {
-            path <- IO(bucketPath.copy(key = key))
-            l <- s3.getObject(path, 1024).compile.toList
-          } yield l.isEmpty
+          val prog: TestProg[Boolean] = bucketName => {
+            val path = bucketName.path(key)
+            s3.getObject(path, 1024).compile.toList.map(_.isEmpty)
+          }
 
-          withBucket(prog) should returnValue {  isEmpty: Boolean =>
+          withRandomBucket(prog) should returnValue {  isEmpty: Boolean =>
             isEmpty should_=== true
           }
         }.set(maxSize = 5)
@@ -318,33 +325,30 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
 
     }
 
-    "getObjectMetadata" should {
+    "headObject" should {
 
       "succeed" in {
         val key = Key("a/b/c.txt")
         val blob = "testtesttest"
-        val blobSize = blob.getBytes.length
 
-        val prog: TestProg[Option[ObjectMetadata]] = bucketPath => for {
-          path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
-          meta <- s3.getObjectMetadata(path)
+        val prog: TestProg[Option[HeadObjectResponse]] = bucketName => for {
+          path <- IO(bucketName.path(key))
+          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
+          meta <- s3.headObject(path)
           _ <- s3.deleteObject(path)
         } yield meta
 
-        withBucket(prog) should returnValue { metaO: Option[ObjectMetadata] =>
-          metaO should beSome
+        withRandomBucket(prog) should returnValue { meta: Option[HeadObjectResponse] =>
+          meta should beSome
         }
       }
 
       "return None if Object does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[Option[ObjectMetadata]] = bucketPath => for {
-            path <- IO(bucketPath.copy(key = key))
-            meta <- s3.getObjectMetadata(path)
-          } yield meta
+          val prog: TestProg[Option[HeadObjectResponse]] = bucketName =>
+            s3.headObject(Path(bucketName, key))
 
-          withBucket(prog) should returnValue(Option.empty[ObjectMetadata])
+          withRandomBucket(prog) should returnValue(Option.empty[HeadObjectResponse])
         }.set(maxSize = 5)
       }
     }
@@ -354,71 +358,50 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       "succeed" in {
         val key = Key("a/b/c.txt")
         val blob = "testtesttest"
-        val blobSize = blob.getBytes.length
         val referenceTags = ObjectTags(Map("k1" -> "v1"))
 
-        val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
-          path <- IO(bucketPath.copy(key = key))
-          _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blobSize.longValue)).compile.drain
-          _ <- s3.setObjectTags(path, referenceTags)
-          tags <- s3.getObjectTags(path)
-          _ <- s3.deleteObject(path)
-        } yield tags
+        val prog: TestProg[Option[ObjectTags]] = bucketName => {
+          val path = Path(bucketName, key)
+          for {
+            _ <- Stream.emits(blob.getBytes).covary[IO].through(s3.putObject(path, blob.getBytes.length.longValue, Nil)).compile.drain
+            _ <- s3.setObjectTags(path, referenceTags)
+            tags <- s3.getObjectTags(path)
+            _ <- s3.deleteObject(path)
+          } yield tags
+        }
 
-        withBucket(prog) should returnValue { tagsOpt: Option[ObjectTags] =>
+        withRandomBucket(prog) should returnValue { tagsOpt: Option[ObjectTags] =>
           tagsOpt should beSome(referenceTags)
         }
       }
 
       "return None if Object does not exist" in {
         prop { key: Key =>
-          val prog: TestProg[Option[ObjectTags]] = bucketPath => for {
-            path <- IO(bucketPath.copy(key = key))
-            tags <- s3.getObjectTags(path)
-          } yield tags
+          val prog: TestProg[Option[ObjectTags]] = bucketName =>
+            s3.getObjectTags(Path(bucketName, key))
 
-          withBucket(prog) should returnValue(Option.empty[ObjectTags])
+          withRandomBucket(prog) should returnValue(Option.empty[ObjectTags])
         }.set(maxSize = 5)
       }
 
     }
-
-    "generatePresignedUrl" should {
-
-      "succeed" in {
-        prop { (path: Path, method: HTTPMethod) =>
-          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), method) should returnOk[URL]
-        }
-      }
-
-      "generate a url with a positive expiration" in {
-        prop { (path: Path) =>
-          s3.generatePresignedUrl(path, ZonedDateTime.now.plusDays(1L), GET) should returnWith { x =>
-            x.value.split("X-Amz-Expires=").toList
-              .drop(1)
-              .headOption should beSome { s: String =>
-              s must startWith("86")
-            }
-          }
-        }
-      }
-    }
+    
   }
 
-  private type TestProg[X] = Path => IO[X]
+  private type TestProg[X] = BucketName => IO[X]
 
-  private def withBucket[X](f: TestProg[X]): IO[X] = for {
-    bucketPath <- bucketName.map(Path(_, Key.empty))
-    x <- withBucket(bucketPath.bucket, f)
+  private def withRandomBucket[X](f: TestProg[X]): IO[X] = for {
+    bn <- randomBucketName
+    x <- withBucket(bn, f)
   } yield x
 
   private def withBucket[X](bn: BucketName, f: TestProg[X]): IO[X] =
-    s3.createBucket(bn).bracket(_ => f(Path(bn, Key.empty)))(_ => s3.deleteBucket(bn))
+    s3.createBucket(bn).bracket(_ => f(bn))(_ => s3.deleteBucket(bn))
 
-  private def bucketName = IO(
-    BucketName.validate(s"test-${System.currentTimeMillis}-${Random.nextInt(9999999).toString}")
-      .fold(_ => sys.error("err"), identity)
-  )
+  private def randomBucketName: IO[BucketName] = for {
+    timestamp <- IO(System.currentTimeMillis)
+    uuid <- IO(UUID.randomUUID.toString)
+  } yield BucketName(s"test-$timestamp-$uuid")
 
   def returnWith[T, R : AsResult](f: T => R): IOMatcher[T] = IOMatcher(f, None)
 
