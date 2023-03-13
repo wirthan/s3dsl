@@ -17,7 +17,6 @@ val enumeratumVersion = "1.7.2"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
 val awsS3      = "software.amazon.awssdk" % "s3" % "2.20.22"
-val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.20.22"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
