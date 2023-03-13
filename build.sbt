@@ -9,15 +9,14 @@ scalaVersion := scala2_13
 ThisBuild / crossScalaVersions := scala2
 
 val catsVersion       = "2.9.0"
-val catsEffectVersion = "3.4.2"
+val catsEffectVersion = "3.4.8"
 val mouseVersion      = "1.2.1"
-val circeVersion      = "0.14.3"
-val fs2Version        = "3.4.0"
+val circeVersion      = "0.14.5"
+val fs2Version        = "3.6.1"
 val enumeratumVersion = "1.7.2"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.19.2"
-val awsS3TransferManager = "software.amazon.awssdk" % "s3-transfer-manager" % "2.19.2"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.20.22"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 
@@ -36,7 +35,6 @@ val cats = Seq(
 val circe = Seq(
   "io.circe"     %% "circe-core"           % circeVersion,
   "io.circe"     %% "circe-generic"        % circeVersion,
-  "io.circe"     %% "circe-generic-extras" % circeVersion,
   "io.circe"     %% "circe-parser"         % circeVersion,
   "com.beachape" %% "enumeratum-circe"     % enumeratumVersion,
 )
@@ -92,7 +90,7 @@ lazy val s3dsl = project.in(file("."))
   .settings(projectSettings)
   .settings(
     Defaults.itSettings,
-    libraryDependencies ++= Seq(awsS3, awsS3TransferManager, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ testDeps
+    libraryDependencies ++= Seq(awsS3, enumeratum, jaxbApi, collectionsCompat) ++ cats ++ circe ++ fs2 ++ testDeps
   )
 
 //

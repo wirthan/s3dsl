@@ -1,27 +1,24 @@
 package s3dsl
 
 import cats.effect.Async
+import cats.effect.kernel.Resource
 import cats.effect.kernel.Sync
-import cats.implicits._
+import cats.syntax.all._
+import collection.immutable._
+import fs2.interop._
 import fs2.Pipe
 import fs2.Stream
-import fs2.interop._
 import io.circe.syntax._
-import s3dsl.domain.S3._
+import java.nio.ByteBuffer
 import s3dsl.domain.auth.Domain.PolicyRead
 import s3dsl.domain.auth.Domain.PolicyWrite
+import s3dsl.domain.S3._
+import scala.jdk.CollectionConverters._
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
-import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.{Bucket, CommonPrefix, GetBucketAclResponse, GetObjectRequest, GetObjectResponse, HeadObjectResponse, ListObjectsV2Request, PutObjectRequest, S3Object, Tag}
-import software.amazon.awssdk.transfer.s3.S3TransferManager
-
-import java.nio.ByteBuffer
-import scala.jdk.CollectionConverters._
-import scala.jdk.FutureConverters._
-import collection.immutable._
-import cats.effect.kernel.Resource
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Publisher
+import software.amazon.awssdk.services.s3.S3AsyncClient
 
 trait S3Dsl[F[_]] {
 
@@ -39,7 +36,6 @@ trait S3Dsl[F[_]] {
   def listObjectsWithCommonPrefixes(bucketName: BucketName, prefix: String): Stream[F, Either[S3Object, CommonPrefix]]
   def putObject(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
-  def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit]
   def deleteObject(path: Path): F[Unit]
 
   def getObjectTags(path: Path): F[Option[ObjectTags]]
@@ -66,15 +62,15 @@ object S3Dsl {
       // s3.doesBucketExistV2(name.value) does not work with minio
 
     override def createBucket(name: BucketName): F[Unit] = Async[F]
-      .fromFuture(Sync[F].delay(client.createBucket(_.bucket(name.value)).asScala))
+      .fromCompletableFuture(Sync[F].delay(client.createBucket(_.bucket(name.value))))
       .void
 
     override def deleteBucket(name: BucketName): F[Unit] = Async[F]
-      .fromFuture(Sync[F].delay(client.deleteBucket(_.bucket(name.value)).asScala))
+      .fromCompletableFuture(Sync[F].delay(client.deleteBucket(_.bucket(name.value))))
       .void
 
     override def listBuckets: F[List[Bucket]] = Async[F]
-      .fromFuture(Sync[F].delay(client.listBuckets.asScala))
+      .fromCompletableFuture(Sync[F].delay(client.listBuckets))
       .map(_.buckets.asScala.toList)
 
     //
@@ -112,13 +108,13 @@ object S3Dsl {
 
         AccessControlList(grants, owner)
       }
-      
+
       Async[F]
-        .fromFuture(Sync[F].delay(client.getBucketAcl(_.bucket(name.value)).asScala))
+        .fromCompletableFuture(Sync[F].delay(client.getBucketAcl(_.bucket(name.value))))
         .map(fromAws)
         .map(_.some)
         .handle404(None)
-        
+
     }
 
     //
@@ -128,7 +124,7 @@ object S3Dsl {
     override def getBucketPolicy(name: BucketName): F[Option[PolicyRead]] = {
       import io.circe.parser.parse
       Async[F]
-        .fromFuture(Sync[F].delay(client.getBucketPolicy(_.bucket(name.value)).asScala))
+        .fromCompletableFuture(Sync[F].delay(client.getBucketPolicy(_.bucket(name.value))))
         .flatMap(aws =>
           Option
             .apply(aws.policy)
@@ -139,21 +135,21 @@ object S3Dsl {
 
     override def setBucketPolicy(bucket: BucketName, policy: PolicyWrite): F[Unit] =
       Async[F]
-        .fromFuture(Sync[F].delay(client.putBucketPolicy(_.bucket(bucket.value).policy(policy.asJson.noSpaces)).asScala))
+        .fromCompletableFuture(Sync[F].delay(client.putBucketPolicy(_.bucket(bucket.value).policy(policy.asJson.noSpaces))))
         .void
 
     //
     // Object
     //
 
-    override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] = 
+    override def getObject(path: Path, chunkSize: Int): Stream[F, Byte] =
       Stream.eval(
-        Async[F].fromFuture( 
+        Async[F].fromCompletableFuture(
           Sync[F].delay(
             client.getObject(
               GetObjectRequest.builder.bucket(path.bucketName.value).key(path.key.value).build,
               AsyncResponseTransformer.toPublisher[GetObjectResponse]
-            ).asScala
+            )
           )
         )
       )
@@ -162,12 +158,12 @@ object S3Dsl {
       .map(Option.apply)
       .handle404(None)
       .unNone
-    
+
     override def headObject(path: Path): F[Option[HeadObjectResponse]] = {
-      Async[F].fromFuture(
+      Async[F].fromCompletableFuture(
         Sync[F].delay(
-          client.headObject(_.bucket(path.bucketName.value).key(path.key.value)
-        ).asScala)
+          client.headObject(_.bucket(path.bucketName.value).key(path.key.value))
+        )
       )
       .map(_.some)
       .handle404(None)
@@ -202,12 +198,12 @@ object S3Dsl {
 
       Stream.resource(createBody(fs2In))
         .evalMap(body =>
-          Async[F].fromFuture(
-            Sync[F].delay(client.putObject(req, body).asScala)
+          Async[F].fromCompletableFuture(
+            Sync[F].delay(client.putObject(req, body))
           )
         ).void
     }
-    override def copyObject(src: Path, dest: Path): F[Unit] = Async[F].fromFuture(
+    override def copyObject(src: Path, dest: Path): F[Unit] = Async[F].fromCompletableFuture(
       Sync[F].delay(
         client.copyObject(
           _
@@ -215,39 +211,14 @@ object S3Dsl {
           .sourceKey(src.key.value)
           .destinationBucket(dest.bucketName.value)
           .destinationKey(dest.key.value)
-        ).asScala
+        )
       )
     ).void
 
-    override def copyObjectMultipart(src: Path, dest: Path, partSizeBytes: Long): F[Unit] = for {
-      tm <- Sync[F].delay(
-        S3TransferManager
-          .builder
-          .s3Client(client)
-          .build
-      )
-      _ <- Async[F].fromFuture(
-        Sync[F].delay(
-          tm
-            .copy(_
-              .copyObjectRequest(
-                _
-                .sourceBucket(src.bucketName.value)
-                .sourceKey(src.key.value)
-                .destinationBucket(dest.bucketName.value)
-                .destinationKey(dest.key.value)
-              )
-            )
-            .completionFuture
-            .asScala
-        )
-      )
-    } yield ()
-
     override def deleteObject(path: Path): F[Unit] = Async[F]
-      .fromFuture(
+      .fromCompletableFuture(
         Sync[F].delay(
-          client.deleteObject(_.bucket(path.bucketName.value).key(path.key.value)).asScala
+          client.deleteObject(_.bucket(path.bucketName.value).key(path.key.value))
         )
       )
       .void
@@ -255,8 +226,8 @@ object S3Dsl {
 
     override def getObjectTags(path: Path): F[Option[ObjectTags]] =
       Async[F]
-        .fromFuture(
-          Sync[F].delay(client.getObjectTagging(_.bucket(path.bucketName.value).key(path.key.value)).asScala)
+        .fromCompletableFuture(
+          Sync[F].delay(client.getObjectTagging(_.bucket(path.bucketName.value).key(path.key.value)))
         )
         .map(_.tagSet.asScala.map(t => t.key -> t.value).toMap)
         .map(ObjectTags.apply)
@@ -265,7 +236,7 @@ object S3Dsl {
 
     override def setObjectTags(path: Path, tags: ObjectTags): F[Unit] =
       Async[F]
-        .fromFuture(
+        .fromCompletableFuture(
           Sync[F].delay(
             client
               .putObjectTagging(
@@ -278,7 +249,6 @@ object S3Dsl {
                   )
                 )
               )
-              .asScala
           )
         )
         .void

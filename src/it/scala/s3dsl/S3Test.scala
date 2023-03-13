@@ -19,8 +19,8 @@ import s3dsl.Gens._
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
-import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.{Bucket, CommonPrefix, HeadObjectResponse, S3Object}
+import software.amazon.awssdk.services.s3.S3AsyncClient
 
 import java.util.UUID
 
@@ -243,9 +243,6 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)
       }
-    }
-
-    "copyObjectMultipart" should {
 
       "succeed for file < 5 MiB" in {
         prop { (src: Key, dest: Key, blob: String) =>
@@ -256,7 +253,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val destPath = Path(bucketName, dest)
             for {
               _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
-              _ <- s3.copyObjectMultipart(srcPath, destPath, 1)
+              _ <- s3.copyObject(srcPath, destPath)
               numBytes <- s3.headObject(destPath).map(_.map(_.contentLength.longValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
@@ -276,7 +273,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             val destPath = Path(bucketName, dest)
             for {
               _ <- Stream.emits(bytes).covary[IO].through(s3.putObject(srcPath, bytes.length.longValue, Nil)).compile.drain
-              _ <- s3.copyObjectMultipart(srcPath, destPath, 5 * 1024 * 1024)
+              _ <- s3.copyObject(srcPath, destPath)
               numBytes <- s3.headObject(destPath).map(_.map(_.contentLength.longValue))
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
@@ -385,7 +382,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
 
     }
-    
+
   }
 
   private type TestProg[X] = BucketName => IO[X]
