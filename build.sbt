@@ -1,4 +1,5 @@
 import scala.collection.Seq
+import xerial.sbt.Sonatype.sonatype01
 
 organization := "com.github.wirthan"
 
@@ -134,5 +135,7 @@ licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 publishMavenStyle := true
 
 publishTo := sonatypePublishToBundle.value
+
+sonatypeCredentialHost := sonatype01
 
 publishConfiguration := publishConfiguration.value.withOverwrite(true)
