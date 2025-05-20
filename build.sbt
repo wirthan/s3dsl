@@ -1,5 +1,4 @@
 import scala.collection.Seq
-import ReleaseTransformations._
 import xerial.sbt.Sonatype._
 
 organization := "com.github.wirthan"
@@ -98,27 +97,6 @@ lazy val s3dsl = project.in(file("."))
   )
 
 //
-// Release
-//
-
-releasePublishArtifactsAction := PgpKeys.publishSigned.value
-
-releaseProcess := Seq[ReleaseStep](
-  checkSnapshotDependencies,
-  inquireVersions,
-  runClean,
-  runTest,
-  setReleaseVersion,
-  commitReleaseVersion,
-  tagRelease,
-  releaseStepCommandAndRemaining("publishSigned"),
-  releaseStepCommand("sonatypeBundleRelease"),
-  setNextVersion,
-  commitNextVersion,
-  pushChanges
-)
-
-//
 // Publishing
 //
 
@@ -135,13 +113,7 @@ developers := List(
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
-ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
-
-publishTo := {
-  val nexus = "https://s01.oss.sonatype.org/"
-  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
-  else Some("releases" at nexus + "content/repositories/releases")
-}
-
+sonatypeCredentialHost := "central.sonatype.com"
+ThisBuild / publishTo := sonatypePublishToBundle.value
 
 publishMavenStyle := true
