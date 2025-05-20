@@ -2,21 +2,21 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val scala2_13 = "2.13.9"
+val scala2_13 = "2.13.14"
 val scala2 = List(scala2_13)
 
 scalaVersion := scala2_13
 ThisBuild / crossScalaVersions := scala2
 
-val catsVersion       = "2.9.0"
-val catsEffectVersion = "3.4.8"
-val mouseVersion      = "1.2.1"
-val circeVersion      = "0.14.5"
-val fs2Version        = "3.6.1"
-val enumeratumVersion = "1.7.2"
+val catsVersion       = "2.12.0"
+val catsEffectVersion = "3.5.4"
+val mouseVersion      = "1.3.2"
+val circeVersion      = "0.14.7"
+val fs2Version        = "3.11.0"
+val enumeratumVersion = "1.7.4"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.20.22"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.21.32"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
 

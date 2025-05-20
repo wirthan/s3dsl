@@ -2,7 +2,6 @@ package s3dsl
 
 import cats.instances.all._
 import cats.syntax.all._
-import enumeratum.scalacheck._
 import fs2.Stream
 
 import java.net.URI

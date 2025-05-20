@@ -11,6 +11,7 @@ import scala.collection.immutable.SortedMap
 import org.scalacheck.Gen
 import org.scalacheck.ScalacheckShapeless._
 
+@SuppressWarnings(Array("org.wartremover.warts.ExplicitImplicitTypes"))
 object Gens {
   private val smallStringSetGen = Gen.buildableOf[Set[String], String](Gen.alphaNumStr).map(_.take(7))
   private lazy val sortedStringStringSetMapGen = for {
@@ -20,7 +21,7 @@ object Gens {
     )
   } yield SortedMap(kv:_*)
 
-  implicit lazy val policyVersionArb= implicitly[Arbitrary[Policy.Version]]
+  implicit lazy val policyVersionArb = implicitly[Arbitrary[Policy.Version]]
   implicit lazy val resourceArb = implicitly[Arbitrary[Resource]]
 
   implicit lazy val principalProviderArb = implicitly[Arbitrary[Principal.Provider]]
