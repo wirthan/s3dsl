@@ -117,10 +117,7 @@ releaseProcess := {
 //
 import xerial.sbt.Sonatype._
 
-ThisBuild / publishTo := sonatypePublishToBundle.value
-ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
-
-homepage := Some(url("https://github.com/mmz-srf/scala-xml-codec"))
+homepage := Some(url("https://github.com/wirthan/s3dsl"))
 
 scmInfo := Some(ScmInfo(
   url("https://github.com/wirthan/s3dsl"), "git@github.com:wirthan/s3dsl.git")
@@ -131,6 +128,10 @@ developers := List(
 )
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
+
+sonatypeCredentialHost := sonatypeCentralHost
+
+publishTo := sonatypePublishToBundle.value
 
 publishMavenStyle := true
 
