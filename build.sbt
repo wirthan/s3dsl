@@ -115,6 +115,9 @@ releaseProcess := {
 //
 // Publishing
 //
+import xerial.sbt.Sonatype._
+
+ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
 
 homepage := Some(url("https://github.com/mmz-srf/scala-xml-codec"))
 
@@ -130,11 +133,6 @@ licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
 publishMavenStyle := true
 
-publishTo := Some(
-  if (isSnapshot.value)
-    Opts.resolver.sonatypeSnapshots
-  else
-    Opts.resolver.sonatypeStaging
-)
+publishTo := sonatypePublishToBundle.value
 
 publishConfiguration := publishConfiguration.value.withOverwrite(true)
