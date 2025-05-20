@@ -1,4 +1,5 @@
 import scala.collection.Seq
+import xerial.sbt.Sonatype.sonatype01
 
 organization := "com.github.wirthan"
 
@@ -136,5 +137,7 @@ publishTo := Some(
   else
     Opts.resolver.sonatypeStaging
 )
+
+sonatypeCredentialHost := sonatype01
 
 publishConfiguration := publishConfiguration.value.withOverwrite(true)
