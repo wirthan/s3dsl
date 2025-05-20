@@ -1,4 +1,6 @@
 import scala.collection.Seq
+import ReleaseTransformations._
+import xerial.sbt.Sonatype._
 
 organization := "com.github.wirthan"
 
@@ -6,12 +8,10 @@ name := "s3dsl"
 
 val javaVersion = 11
 val scala2_13 = "2.13.14"
-val scala2 = List(scala2_13)
 
 scalaVersion := scala2_13
 scalacOptions += s"-target:${javaVersion.toString}"
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
-ThisBuild / crossScalaVersions := scala2
 
 val catsVersion       = "2.12.0"
 val catsEffectVersion = "3.5.4"
@@ -63,7 +63,6 @@ lazy val warts = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
-  crossScalaVersions := scala2,
   scalacOptions ++= Seq(
     "-language:higherKinds",
     "-language:implicitConversions",
@@ -104,19 +103,26 @@ lazy val s3dsl = project.in(file("."))
 
 releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
-releaseProcess := {
-  import ReleaseTransformations._
-  releaseProcess.value.dropRight(1) ++ Seq[ReleaseStep](
-    releaseStepCommand("sonatypeBundleRelease"),
-    pushChanges
-  )
-}
+releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies,
+  inquireVersions,
+  runClean,
+  runTest,
+  setReleaseVersion,
+  commitReleaseVersion,
+  tagRelease,
+  releaseStepCommandAndRemaining("publishSigned"),
+  releaseStepCommand("sonatypeBundleRelease"),
+  setNextVersion,
+  commitNextVersion,
+  pushChanges
+)
 
 //
 // Publishing
 //
-import xerial.sbt.Sonatype._
 
+sonatypeProjectHosting := Some(GitHubHosting("wirthan", "s3dsl", "andreas.wirth78@gmail.com"))
 homepage := Some(url("https://github.com/wirthan/s3dsl"))
 
 scmInfo := Some(ScmInfo(
@@ -129,10 +135,12 @@ developers := List(
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
-sonatypeCredentialHost := sonatypeCentralHost
+ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
 
-publishTo := sonatypePublishToBundle.value
+publishTo := {
+  val nexus = "https://s01.oss.sonatype.org/"
+  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
+  else Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+}
 
 publishMavenStyle := true
-
-publishConfiguration := publishConfiguration.value.withOverwrite(true)
