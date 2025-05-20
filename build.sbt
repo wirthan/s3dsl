@@ -107,7 +107,7 @@ releasePublishArtifactsAction := PgpKeys.publishSigned.value
 releaseProcess := {
   import ReleaseTransformations._
   releaseProcess.value.dropRight(1) ++ Seq[ReleaseStep](
-    releaseStepCommand("sonatypeRelease"),
+    releaseStepCommand("sonatypeBundleRelease"),
     pushChanges
   )
 }
@@ -117,6 +117,7 @@ releaseProcess := {
 //
 import xerial.sbt.Sonatype._
 
+ThisBuild / publishTo := sonatypePublishToBundle.value
 ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
 
 homepage := Some(url("https://github.com/mmz-srf/scala-xml-codec"))
@@ -132,7 +133,5 @@ developers := List(
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
 publishMavenStyle := true
-
-publishTo := sonatypePublishToBundle.value
 
 publishConfiguration := publishConfiguration.value.withOverwrite(true)
