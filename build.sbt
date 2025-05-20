@@ -1,11 +1,16 @@
+import scala.collection.Seq
+
 organization := "com.github.wirthan"
 
 name := "s3dsl"
 
+val javaVersion = 11
 val scala2_13 = "2.13.14"
 val scala2 = List(scala2_13)
 
 scalaVersion := scala2_13
+scalacOptions += s"-target:${javaVersion.toString}"
+javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
 ThisBuild / crossScalaVersions := scala2
 
 val catsVersion       = "2.12.0"
