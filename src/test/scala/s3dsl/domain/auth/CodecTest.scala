@@ -29,7 +29,7 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Principal.Provider codec" should {
     "be reversible" in {
-      prop { provider: Principal.Provider =>
+      prop { (provider: Principal.Provider) =>
         provider.asJson.asString should beSome(provider.v)
         provider.v.asJson.as[Principal.Provider].toOption should beSome(provider)
       }.set(maxSize = 10)

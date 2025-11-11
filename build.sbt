@@ -7,8 +7,10 @@ name := "s3dsl"
 
 val javaVersion = 11
 val scala2_13 = "2.13.14"
+val scala3 = "3.7.1"
+val supportedScalaVersions = List(scala2_13,scala3)
 
-scalaVersion := scala2_13
+scalaVersion := scala3
 scalacOptions += s"-target:${javaVersion.toString}"
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
 
@@ -47,7 +49,6 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0",
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.2",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
@@ -62,6 +63,7 @@ lazy val warts = Warts.allBut(
 )
 
 lazy val projectSettings = Seq(
+  crossScalaVersions := supportedScalaVersions,
   scalacOptions ++= Seq(
     "-language:higherKinds",
     "-language:implicitConversions",
@@ -71,6 +73,7 @@ lazy val projectSettings = Seq(
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
     "-Ywarn-unused",
+    "-source:3.0-migration"
     //"-Xfatal-warnings"
   ),
   Compile / scalacOptions ++= {
@@ -82,7 +85,6 @@ lazy val projectSettings = Seq(
   Compile / compile / wartremoverWarnings  := warts,
   Test / test / wartremoverWarnings  := warts,
 
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
 
 lazy val IntegrationTest = config("it") extend(Test)

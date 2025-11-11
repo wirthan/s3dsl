@@ -9,7 +9,6 @@ import s3dsl.domain.auth.Domain._
 import org.scalacheck.cats.implicits._
 import scala.collection.immutable.SortedMap
 import org.scalacheck.Gen
-import org.scalacheck.ScalacheckShapeless._
 
 @SuppressWarnings(Array("org.wartremover.warts.ExplicitImplicitTypes"))
 object Gens {
@@ -21,32 +20,66 @@ object Gens {
     )
   } yield SortedMap(kv:_*)
 
-  implicit lazy val policyVersionArb = implicitly[Arbitrary[Policy.Version]]
-  implicit lazy val resourceArb = implicitly[Arbitrary[Resource]]
+  private lazy val arbStringGen = Arbitrary.arbString.arbitrary
+  implicit lazy val policyVersionArb: Arbitrary[Policy.Version] = Arbitrary(arbStringGen.map(Policy.Version.apply))
+  implicit lazy val resourceArb: Arbitrary[Resource] = Arbitrary(arbStringGen.map(Resource.apply))
 
-  implicit lazy val principalProviderArb = implicitly[Arbitrary[Principal.Provider]]
-  implicit lazy val principalIdArb = implicitly[Arbitrary[Principal.Id]]
-  implicit lazy val principalArb = implicitly[Arbitrary[Set[Principal]]]
+  implicit lazy val principalProviderArb: Arbitrary[Principal.Provider] = Arbitrary(arbStringGen.map(Principal.Provider.apply))
+  implicit lazy val principalIdArb: Arbitrary[Principal.Id] = Arbitrary(arbStringGen.map(Principal.Id.apply))
+
+  implicit lazy val principalArb: Arbitrary[Principal] = Arbitrary(Tuple2.apply(
+    arbStringGen,
+    arbStringGen
+  ).mapN((provider, id) => Principal(Principal.Provider(provider), Principal.Id(id))))
+
+  implicit lazy val principalSetArb: Arbitrary[Set[Principal]] = Arbitrary(
+    Gen.listOf(principalArb.arbitrary).map(_.toSet)
+  )
 
   implicit lazy val nemArb: Arbitrary[NonEmptyMap[String, Set[String]]] = Arbitrary(
       sortedStringStringSetMapGen.suchThat(_.nonEmpty).map(m => NonEmptyMap.fromMapUnsafe(m))
   )
 
-  lazy val conditionGen = for {
+  lazy val conditionSetGen = for {
     types <- smallStringSetGen.map(_.toList)
     list <- types.traverse(s =>
       Applicative[Gen].map2(Gen.const(s), nemArb.arbitrary)((a, b) => Condition(a, b))
     )
   } yield list.toSet
 
-  implicit lazy val conditionArb = Arbitrary(conditionGen)
+  implicit lazy val conditionArb: Arbitrary[Set[Condition]] = Arbitrary(conditionSetGen)
 
-  implicit lazy val statementWriteArb = implicitly[Arbitrary[StatementWrite]]
+  implicit lazy val statementWriteArb: Arbitrary[StatementWrite] = Arbitrary(
+    Tuple6.apply(
+      Arbitrary.arbString.arbitrary,
+      Gen.oneOf(Effect.values),
+      principalSetArb.arbitrary,
+      Gen.someOf(S3Action.values).map(_.toSet),
+      Gen.listOf(resourceArb.arbitrary).map(_.toSet),
+      conditionSetGen
+    ).mapN(StatementWrite.apply))
 
-  implicit lazy val statementReadArb = implicitly[Arbitrary[StatementRead]]
 
-  implicit lazy val policyWriteArb = implicitly[Arbitrary[PolicyWrite]]
+  implicit lazy val statementReadArb: Arbitrary[StatementRead] = Arbitrary( Tuple6.apply(
+      Gen.option(Arbitrary.arbString.arbitrary),
+      Gen.oneOf(Effect.values),
+      principalSetArb.arbitrary,
+      Gen.someOf(S3Action.values).map(_.toSet),
+      Gen.listOf(resourceArb.arbitrary).map(_.toSet),
+      conditionSetGen
+  ).mapN(StatementRead.apply))
 
-  implicit lazy val policyReadArb = implicitly[Arbitrary[PolicyRead]]
+  implicit lazy val policyWriteArb: Arbitrary[PolicyWrite] = Arbitrary(Tuple3.apply(
+      Gen.option(Arbitrary.arbString.arbitrary),
+      policyVersionArb.arbitrary,
+      Gen.listOf(statementWriteArb.arbitrary)
+  ).mapN(PolicyWrite.apply))
+
+  implicit lazy val policyReadArb: Arbitrary[PolicyRead] = Arbitrary(Tuple3.apply(
+      Gen.option(Arbitrary.arbString.arbitrary),
+      policyVersionArb.arbitrary,
+      Gen.listOf(statementReadArb.arbitrary)
+  ).mapN(PolicyRead.apply))
+
 
 }
