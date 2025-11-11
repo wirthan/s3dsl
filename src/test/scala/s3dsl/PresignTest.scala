@@ -21,7 +21,7 @@ import scala.concurrent.duration._
 
 object PresignTest extends Specification with ValidatedMatchers with ScalaCheck {
   
-  val presigner = 
+  val presigner: S3Presigner = 
     S3Presigner
     .builder()
     .credentialsProvider(
@@ -29,7 +29,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
     )
     .build()
 
-  val duration = 12.hours
+  val duration: FiniteDuration = 12.hours
 
   "Signing of Request" should {
 
@@ -42,7 +42,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long) =>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
@@ -57,7 +57,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long) =>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
@@ -73,7 +73,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long) =>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
@@ -90,7 +90,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long) =>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
@@ -106,7 +106,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long =>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long) =>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }
@@ -122,7 +122,7 @@ object PresignTest extends Specification with ValidatedMatchers with ScalaCheck 
           .build()
           .presign(presigner, duration)
         
-        extractExpiration(presignedUrl.url) should beSome { d: Long=>
+        extractExpiration(presignedUrl.url) should beSome { (d: Long)=>
           d must between(duration.toSeconds - 1, duration.toSeconds)
         }
       }

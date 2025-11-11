@@ -20,7 +20,7 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Action codec" should {
     "be reversible" in {
-      prop { action: S3Action =>
+      prop { (action: S3Action) =>
         action.asJson.asString should beSome(action.entryName)
         action.entryName.asJson.as[S3Action].toOption should beSome(action)
       }
@@ -38,7 +38,7 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Principal.Id codec" should {
     "be reversible" in {
-      prop { id: Principal.Id =>
+      prop { (id: Principal.Id) =>
         id.asJson.asString should beSome(id.v)
         id.v.asJson.as[Principal.Id].toOption should beSome(id)
       }.set(maxSize = 10)
@@ -56,7 +56,7 @@ object CodecTest extends Specification with ScalaCheck {
           		"arn:aws:iam::ACCOUNT_ID:user/USERNAME_B"
           		]
           }"""
-      json.as[Set[Principal]] should beRight { p: Set[Principal] => p should haveSize(2) }
+      json.as[Set[Principal]] should beRight { (p: Set[Principal]) => p should haveSize(2) }
     }
 
     "decode string and array values" in {
@@ -64,12 +64,12 @@ object CodecTest extends Specification with ScalaCheck {
                     "AWS": "*",
                      "Arr": ["a", "b"]
                      }"""
-      json.as[Set[Principal]] should beRight { p: Set[Principal] => p should haveSize(3) }
+      json.as[Set[Principal]] should beRight { (p: Set[Principal]) => p should haveSize(3) }
     }
 
     "be reversible" in {
-      prop {p: Set[Principal] =>
-        p.asJson.as[Set[Principal]] should beRight{ p2: Set[Principal] => p2 should containAllOf(p.toList) }
+      prop {(p: Set[Principal]) =>
+        p.asJson.as[Set[Principal]] should beRight{ (p2: Set[Principal]) => p2 should containAllOf(p.toList) }
       }.set(maxSize = 20)
     }
   }
@@ -97,14 +97,14 @@ object CodecTest extends Specification with ScalaCheck {
           }
         }"""
 
-      decode[Set[Condition]](exampleJson) should beRight { p: Set[Condition] =>
+      decode[Set[Condition]](exampleJson) should beRight { (p: Set[Condition]) =>
         p should haveSize(1)
       }
     }
 
     "be reversible" in {
-      prop {c: Set[Condition] =>
-        c.asJson.as[Set[Condition]] should beRight{ c2: Set[Condition] =>
+      prop {(c: Set[Condition]) =>
+        c.asJson.as[Set[Condition]] should beRight{ (c2: Set[Condition]) =>
           c2 should containAllOf(c.toList)
         }
       }.set(maxSize = 20)
@@ -113,8 +113,8 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Resource coded" should {
     "be reversible" in {
-      prop {r: Resource =>
-        r.asJson.as[Resource] should beRight{ r2: Resource =>
+      prop {(r: Resource) =>
+        r.asJson.as[Resource] should beRight{ (r2: Resource) =>
           r2 should be_==(r)
         }
       }.set(maxSize = 10)
@@ -123,8 +123,8 @@ object CodecTest extends Specification with ScalaCheck {
 
   "StatementWrite codec" should {
     "be reversible" in {
-      prop {s: StatementWrite =>
-        s.asJson.as[StatementWrite] should beRight{ s2: StatementWrite => s2 should be_==(s) }
+      prop {(s: StatementWrite) =>
+        s.asJson.as[StatementWrite] should beRight{ (s2: StatementWrite) => s2 should be_==(s) }
       }.set(maxSize = 20)
     }
   }
@@ -132,8 +132,8 @@ object CodecTest extends Specification with ScalaCheck {
   "StatementRead codec" should {
 
     "be reversible" in {
-      prop {s: StatementRead =>
-        s.asJson.as[StatementRead] should beRight{ s2: StatementRead => s2 should be_==(s) }
+      prop {(s: StatementRead) =>
+        s.asJson.as[StatementRead] should beRight{ (s2: StatementRead) => s2 should be_==(s) }
       }.set(maxSize = 20)
     }
 
@@ -159,8 +159,8 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Version codec" should {
     "be reversible" in {
-      prop {v: Policy.Version =>
-        v.asJson.as[Policy.Version] should beRight{ v2: Policy.Version => v2 should be_==(v) }
+      prop {(v: Policy.Version) =>
+        v.asJson.as[Policy.Version] should beRight{ (v2: Policy.Version) => v2 should be_==(v) }
       }.set(maxSize = 20)
     }
   }
@@ -168,7 +168,7 @@ object CodecTest extends Specification with ScalaCheck {
   "PolicyWrite encoder" should {
 
     "be successful" in {
-      prop {p: PolicyWrite =>
+      prop {(p: PolicyWrite) =>
         p.asJson should be_!=(Json.Null)
       }.set(maxSize = 20)
     }
@@ -243,7 +243,7 @@ object CodecTest extends Specification with ScalaCheck {
     }
   }
 
-  def loadFiles(path: String, ext: String) = new File(path)
+  def loadFiles(path: String, ext: String): List[String] = new File(path)
     .listFiles.toList
     .filter(_.getName.endsWith(s".$ext"))
     .map(f => Source.fromFile(f).mkString)

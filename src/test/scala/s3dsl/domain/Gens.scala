@@ -40,7 +40,7 @@ object Gens {
       sortedStringStringSetMapGen.suchThat(_.nonEmpty).map(m => NonEmptyMap.fromMapUnsafe(m))
   )
 
-  lazy val conditionSetGen = for {
+  lazy val conditionSetGen: Gen[Set[Condition]] = for {
     types <- smallStringSetGen.map(_.toList)
     list <- types.traverse(s =>
       Applicative[Gen].map2(Gen.const(s), nemArb.arbitrary)((a, b) => Condition(a, b))
