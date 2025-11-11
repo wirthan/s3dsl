@@ -6,12 +6,11 @@ organization := "com.github.wirthan"
 name := "s3dsl"
 
 val javaVersion = 11
-val scala2_13 = "2.13.14"
+val scala2_13 = "2.13.17"
 val scala3 = "3.7.1"
 val supportedScalaVersions = List(scala2_13,scala3)
 
 scalaVersion := scala3
-scalacOptions += s"-target:${javaVersion.toString}"
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
 
 val catsVersion       = "2.12.0"
@@ -62,24 +61,32 @@ lazy val warts = Warts.allBut(
   Wart.NonUnitStatements
 )
 
-lazy val projectSettings = Seq(
-  crossScalaVersions := supportedScalaVersions,
-  scalacOptions ++= Seq(
+lazy val sharedScalacOptions =
+  Seq(
     "-language:higherKinds",
     "-language:implicitConversions",
     "-deprecation",
-    "-feature",
+    "-feature"
+  )
+
+lazy val scala2CompileOptions = sharedScalacOptions ++
+  Seq(
     "-Xlint",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
-    "-Ywarn-unused",
-    "-source:3.0-migration"
-    //"-Xfatal-warnings"
-  ),
+    "-Ywarn-unused"
+  )
+
+lazy val scala3CompileOptions = sharedScalacOptions ++
+  Seq("-Wunused:all", "-Xunchecked-java-output-version:11")
+
+
+lazy val projectSettings = Seq(
+  crossScalaVersions := supportedScalaVersions,
   Compile / scalacOptions ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n <= 13 => List("-Ymacro-annotations")
-      case _                       => Nil
+      case Some((2, _)) => scala2CompileOptions
+      case Some((3,_))  => scala3CompileOptions
     }
   },
   Compile / compile / wartremoverWarnings  := warts,
