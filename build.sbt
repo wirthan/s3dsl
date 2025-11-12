@@ -18,12 +18,12 @@ val catsEffectVersion = "3.5.4"
 val mouseVersion      = "1.3.2"
 val circeVersion      = "0.14.7"
 val fs2Version        = "3.11.0"
-val enumeratumVersion = "1.7.4"
+val enumeratumVersion = "1.9.0"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.21.32"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.38.3"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
-val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
+val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
 val fs2 = Seq(
   "co.fs2" %% "fs2-core",
