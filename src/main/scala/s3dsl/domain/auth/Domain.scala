@@ -15,7 +15,7 @@ import io.circe.syntax._
 object Domain {
   // "Principal" has permission to do "Action" to "Resource" where "Condition" applies.
 
-  private implicit def decodeValueOrArray[T](using ev: Decoder[T]): Decoder[List[T]] = (c: HCursor) =>
+  private implicit def decodeValueOrArray[T](implicit ev: Decoder[T]): Decoder[List[T]] = (c: HCursor) =>
     c.value.isArray.fold(c.value, Json.arr(c.value)).as[List[T]](using Decoder.decodeList[T])
 
   //
@@ -144,13 +144,13 @@ object Domain {
   object Condition {
     implicit lazy val eq: Eq[Condition] = Eq.fromUniversalEquals[Condition]
 
-    private val mapMapEncoder = summon[Encoder[Map[String, Map[String, Set[String]]]]]
+    private val mapMapEncoder = Encoder[Map[String, Map[String, Set[String]]]]
     implicit lazy val setEncoder: Encoder[Set[Condition]] = Encoder.instance { set =>
       val map = set.map(c => c.kind -> (c.condition.toSortedMap: Map[String, Set[String]]).map(cc => (cc._1, cc._2)))
       map.toMap.asJson(using mapMapEncoder): Json
     }
 
-    private val mapMapDecoder = summon[Decoder[Map[String, NonEmptyMap[String, Set[String]]]]]
+    private val mapMapDecoder = Decoder[Map[String, NonEmptyMap[String, Set[String]]]]
     implicit lazy val setDecoder: Decoder[Set[Condition]] = mapMapDecoder.map(m =>
       m.map(t => Condition(t._1, t._2)).toSet
     )
@@ -189,7 +189,7 @@ object Domain {
     implicit lazy val eq: Eq[Principal] = Eq.fromUniversalEquals[Principal]
     implicit lazy val order: Order[Principal] = Order.by[Principal, (Provider, Id)](p => (p.provider, p.id))
 
-    private val mapEncoder = summon[Encoder[Map[String, List[String]]]]
+    private val mapEncoder = Encoder[Map[String, List[String]]]
     implicit lazy val setEncoder: Encoder[Set[Principal]] = Encoder.instance { set =>
       val map = set
         .map(p => p.provider.v -> p.id.v)
@@ -198,7 +198,7 @@ object Domain {
       map.asJson(using mapEncoder): Json
     }
 
-    private val mapDecoder = summon[Decoder[Map[String, List[String]]]]
+    private val mapDecoder = Decoder[Map[String, List[String]]]
     implicit lazy val setDecoder: Decoder[Set[Principal]] = mapDecoder.map(m =>
       m.flatMap(t =>
         t._2.map(i => Principal(Provider(t._1), Id(i)))

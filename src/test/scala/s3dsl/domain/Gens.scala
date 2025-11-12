@@ -18,7 +18,7 @@ object Gens {
     kv <- keys.toList.traverse(k =>
       Applicative[Gen].map2(Gen.const(k), smallStringSetGen)((a, b) => (a, b))
     )
-  } yield SortedMap(kv*)
+  } yield SortedMap(kv: _*)
 
   private lazy val arbStringGen = Arbitrary.arbString.arbitrary
   implicit lazy val policyVersionArb: Arbitrary[Policy.Version] = Arbitrary(arbStringGen.map(Policy.Version.apply))
