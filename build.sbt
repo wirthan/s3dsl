@@ -12,6 +12,7 @@ val supportedScalaVersions = List(scala2_13,scala3)
 
 scalaVersion := scala3
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
+releaseCrossBuild := true
 
 val catsVersion       = "2.12.0"
 val catsEffectVersion = "3.5.4"
