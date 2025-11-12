@@ -47,7 +47,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "listBuckets" should {
       "succeed" in {
         val buckets = withRandomBucket(_ => s3.listBuckets)
-        buckets should returnValue { l: List[Bucket] =>
+        buckets should returnValue { (l: List[Bucket]) =>
           l should not(beEmpty)
         }
       }
@@ -71,21 +71,21 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "getBucketAcl" should {
 
       "return Some if bucket exists" in {
-        prop { bn: BucketName =>
+        prop { (bn: BucketName) =>
           val prog = for {
             _ <- s3.createBucket(bn)
             acl <- s3.getBucketAcl(bn)
             _ <- s3.deleteBucket(bn)
           } yield acl
 
-          prog should returnValue{ acl: Option[AccessControlList] =>
+          prog should returnValue{ (acl: Option[AccessControlList]) =>
             acl should beSome
           }
         }
       }.set(maxSize = 8)
 
       "return None if bucket does not exist" in {
-        prop { bn: BucketName =>
+        prop { (bn: BucketName) =>
           s3.getBucketAcl(bn) should returnValue(Option.empty[s3dsl.domain.S3.AccessControlList])
         }
       }
@@ -95,7 +95,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
     "getting and setting Bucket Policy" should {
 
       "succeed for a simple case" in {
-        prop { bn: BucketName =>
+        prop { (bn: BucketName) =>
           val policyWrite = PolicyWrite(
             id = Some("1"),
             version = Policy.Version.defaultVersion,
@@ -124,7 +124,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             policyRead <- s3.getBucketPolicy(bucketName)
           } yield policyRead
 
-          withBucket(bn, prog) should returnValue{ policy: Option[PolicyRead] =>
+          withBucket(bn, prog) should returnValue{ (policy: Option[PolicyRead]) =>
             policy should beSome
           }
         }
@@ -179,7 +179,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
             _ <- s3.deleteObject(path)
           } yield obj
 
-          withRandomBucket(prog) should returnValue{ bytes : List[Byte] =>
+          withRandomBucket(prog) should returnValue{ (bytes: List[Byte]) =>
             bytes should haveSize(blob.getBytes.length)
           }
 
@@ -211,7 +211,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
       }
 
       "return an empty stream for a prefix that does not exist" in {
-        prop { key: Key =>
+        prop { (key: Key) =>
           val prog: TestProg[List[Either[S3Object, CommonPrefix]]] = bucketName =>
             s3.listObjectsWithCommonPrefixes(bucketName, key.value).compile.toList
           withRandomBucket(prog) should returnValue{(l: List[Either[S3Object, CommonPrefix]]) =>
@@ -237,7 +237,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+          withRandomBucket(prog) should returnValue{ (numBytes: Option[Long]) =>
             numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)
@@ -257,7 +257,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+          withRandomBucket(prog) should returnValue{ (numBytes: Option[Long]) =>
             numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 2).setGen3(Gens.blobGen)
@@ -277,7 +277,7 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
               _ <- List(srcPath, destPath).parTraverse_(s3.deleteObject)
             } yield numBytes
           }
-          withRandomBucket(prog) should returnValue{ numBytes: Option[Long] =>
+          withRandomBucket(prog) should returnValue{ (numBytes: Option[Long]) =>
             numBytes should be_==(bytes.length.some)
           }
         }.set(maxSize = 1)
@@ -301,19 +301,19 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield content
         }
 
-        withRandomBucket(prog) should returnValue { content: List[Byte] =>
+        withRandomBucket(prog) should returnValue { (content: List[Byte]) =>
           content should haveSize(blobSize)
         }
       }
 
       "return Empty Stream if Object does not exist" in {
-        prop { key: Key =>
+        prop { (key: Key) =>
           val prog: TestProg[Boolean] = bucketName => {
             val path = bucketName.path(key)
             s3.getObject(path, 1024).compile.toList.map(_.isEmpty)
           }
 
-          withRandomBucket(prog) should returnValue {  isEmpty: Boolean =>
+          withRandomBucket(prog) should returnValue { (isEmpty: Boolean) =>
             isEmpty should_=== true
           }
         }.set(maxSize = 5)
@@ -334,13 +334,13 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           _ <- s3.deleteObject(path)
         } yield meta
 
-        withRandomBucket(prog) should returnValue { meta: Option[HeadObjectResponse] =>
+        withRandomBucket(prog) should returnValue { (meta: Option[HeadObjectResponse]) =>
           meta should beSome
         }
       }
 
       "return None if Object does not exist" in {
-        prop { key: Key =>
+        prop { (key: Key) =>
           val prog: TestProg[Option[HeadObjectResponse]] = bucketName =>
             s3.headObject(Path(bucketName, key))
 
@@ -366,13 +366,13 @@ object S3Test extends Specification with ScalaCheck with IOMatchers {
           } yield tags
         }
 
-        withRandomBucket(prog) should returnValue { tagsOpt: Option[ObjectTags] =>
+        withRandomBucket(prog) should returnValue { (tagsOpt: Option[ObjectTags]) =>
           tagsOpt should beSome(referenceTags)
         }
       }
 
       "return None if Object does not exist" in {
-        prop { key: Key =>
+        prop { (key: Key) =>
           val prog: TestProg[Option[ObjectTags]] = bucketName =>
             s3.getObjectTags(Path(bucketName, key))
 
