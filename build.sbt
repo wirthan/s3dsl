@@ -1,15 +1,16 @@
 import scala.collection.Seq
-import xerial.sbt.Sonatype._
+import xerial.sbt.Sonatype.*
 
 organization := "com.github.wirthan"
 
 name := "s3dsl"
 
 val javaVersion = 11
-val scala2_13 = "2.13.14"
+val scala2_13 = "2.13.17"
+val scala3 = "3.7.1"
+val supportedScalaVersions = List(scala2_13,scala3)
 
-scalaVersion := scala2_13
-scalacOptions += s"-target:${javaVersion.toString}"
+scalaVersion := scala3
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
 
 val catsVersion       = "2.12.0"
@@ -17,12 +18,12 @@ val catsEffectVersion = "3.5.4"
 val mouseVersion      = "1.3.2"
 val circeVersion      = "0.14.7"
 val fs2Version        = "3.11.0"
-val enumeratumVersion = "1.7.4"
+val enumeratumVersion = "1.9.0"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.21.32"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.38.3"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
-val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
+val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
 val fs2 = Seq(
   "co.fs2" %% "fs2-core",
@@ -47,7 +48,6 @@ val testDeps = Seq(
   "org.specs2"                 %% "specs2-core"               % specs2Version,
   "org.specs2"                 %% "specs2-scalacheck"         % specs2Version,
   "org.specs2"                 %% "specs2-cats"               % specs2Version,
-  "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0",
   "io.chrisdavenport"          %% "cats-scalacheck"           % "0.3.2",
   "com.beachape"               %% "enumeratum-scalacheck"     % enumeratumVersion,
   "io.circe"                   %% "circe-literal"             % circeVersion
@@ -61,28 +61,37 @@ lazy val warts = Warts.allBut(
   Wart.NonUnitStatements
 )
 
-lazy val projectSettings = Seq(
-  scalacOptions ++= Seq(
+lazy val sharedScalacOptions =
+  Seq(
     "-language:higherKinds",
     "-language:implicitConversions",
     "-deprecation",
-    "-feature",
+    "-feature"
+  )
+
+lazy val scala2CompileOptions = sharedScalacOptions ++
+  Seq(
     "-Xlint",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
-    "-Ywarn-unused",
-    //"-Xfatal-warnings"
-  ),
+    "-Ywarn-unused"
+  )
+
+lazy val scala3CompileOptions = sharedScalacOptions ++
+  Seq("-Wunused:all", "-Xunchecked-java-output-version:11")
+
+
+lazy val projectSettings = Seq(
+  crossScalaVersions := supportedScalaVersions,
   Compile / scalacOptions ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n <= 13 => List("-Ymacro-annotations")
-      case _                       => Nil
+      case Some((2, _)) => scala2CompileOptions
+      case Some((3,_))  => scala3CompileOptions
     }
   },
   Compile / compile / wartremoverWarnings  := warts,
   Test / test / wartremoverWarnings  := warts,
 
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
 
 lazy val IntegrationTest = config("it") extend(Test)

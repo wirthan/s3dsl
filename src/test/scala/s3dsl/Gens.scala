@@ -16,7 +16,7 @@ object Gens {
 
   val keyGen: Gen[Key] = sizeLimitedString(10, 30, Gen.alphaLowerChar).map(Key.apply)
 
-  val zonedDateTimeGen = for {
+  val zonedDateTimeGen: Gen[ZonedDateTime] = for {
     (year, month) <- Applicative[Gen].tuple2(Gen.choose(-292278994, 292278994), Gen.choose(1, 12))
     dateTime <- Applicative[Gen].map6(
       Gen.choose(1, Month.of(month).length(Year.of(year).isLeap)), //dayOfMonth
