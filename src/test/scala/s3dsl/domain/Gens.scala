@@ -37,7 +37,7 @@ object Gens {
   )
 
   implicit lazy val nemArb: Arbitrary[NonEmptyMap[String, Set[String]]] = Arbitrary(
-      sortedStringStringSetMapGen.suchThat(_.nonEmpty).map(m => NonEmptyMap.fromMapUnsafe(m))
+    sortedStringStringSetMapGen.suchThat(_.nonEmpty).map(m => NonEmptyMap.fromMapUnsafe(m))
   )
 
   lazy val conditionSetGen: Gen[Set[Condition]] = for {

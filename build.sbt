@@ -1,5 +1,5 @@
 import scala.collection.Seq
-import xerial.sbt.Sonatype._
+import xerial.sbt.Sonatype.*
 
 organization := "com.github.wirthan"
 
