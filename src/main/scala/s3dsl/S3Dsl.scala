@@ -34,7 +34,8 @@ trait S3Dsl[F[_]] {
   def getObject(path: Path, chunkSize: Int): Stream[F, Byte]
   def listObjects(bucketName: BucketName): Stream[F, S3Object]
   def listObjectsWithCommonPrefixes(bucketName: BucketName, prefix: String): Stream[F, Either[S3Object, CommonPrefix]]
-  def putObject(path: Path, contentLength: Long, headers: List[(String, String)]): Pipe[F, Byte, Unit]
+  def putObject(path: Path, contentLength: Long, metadata: List[(String, String)]): Pipe[F, Byte, Unit]
+  def putObject(path: Path, contentLength: Long, contentType: String, metadata: List[(String, String)]): Pipe[F, Byte, Unit]
   def copyObject(src: Path, dest: Path): F[Unit]
   def deleteObject(path: Path): F[Unit]
 
@@ -181,15 +182,28 @@ object S3Dsl {
 
     override def putObject(path: Path,
                            contentLength: Long,
-                           headers: List[(String, String)]): Pipe[F, Byte, Unit] =  fs2In => {
+                           metadata: List[(String, String)]): Pipe[F, Byte, Unit] =
+      putObject(path, contentLength, None, metadata)
 
-      lazy val req = PutObjectRequest
+    override def putObject(path: Path,
+                           contentLength: Long,
+                           contentType: String,
+                           metadata: List[(String, String)]): Pipe[F, Byte, Unit] =
+      putObject(path, contentLength, Some(contentType), metadata)
+
+    private def putObject(path: Path,
+                          contentLength: Long,
+                          contentType: Option[String],
+                          metadata: List[(String, String)]): Pipe[F, Byte, Unit] = fs2In => {
+
+      lazy val reqB = PutObjectRequest
         .builder
         .bucket(path.bucketName.value)
         .key(path.key.value)
-        .metadata(headers.toMap.asJava)
+        .metadata(metadata.toMap.asJava)
         .contentLength(contentLength)
-        .build
+
+      val req = contentType.fold(reqB)(contentType => reqB.contentType(contentType)).build
 
       def createBody(s: Stream[F, Byte]): Resource[F, AsyncRequestBody] =
         reactivestreams.StreamUnicastPublisher[F, ByteBuffer](
@@ -203,6 +217,7 @@ object S3Dsl {
           )
         ).void
     }
+
     override def copyObject(src: Path, dest: Path): F[Unit] = Async[F].fromCompletableFuture(
       Sync[F].delay(
         client.copyObject(
