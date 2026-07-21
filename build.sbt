@@ -7,7 +7,7 @@ name := "s3dsl"
 
 val javaVersion = 11
 val scala2_13 = "2.13.17"
-val scala3 = "3.7.1"
+val scala3 = "3.7.4"
 val supportedScalaVersions = List(scala2_13,scala3)
 
 scalaVersion := scala3
@@ -59,7 +59,7 @@ lazy val warts = Warts.allBut(
   Wart.Nothing,
   Wart.NonUnitStatements,
   Wart.PublicInference,
-  Wart.NonUnitStatements
+  Wart.Overloading
 )
 
 lazy val sharedScalacOptions =
