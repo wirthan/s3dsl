@@ -5,24 +5,24 @@ organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val javaVersion = 11
-val scala2_13 = "2.13.17"
-val scala3 = "3.7.4"
+val javaVersion = 17
+val scala2_13 = "2.13.18"
+val scala3 = "3.10.1"
 val supportedScalaVersions = List(scala2_13,scala3)
 
 scalaVersion := scala3
 javacOptions ++= Seq("-source", javaVersion.toString, "-target", javaVersion.toString)
 releaseCrossBuild := true
 
-val catsVersion       = "2.12.0"
-val catsEffectVersion = "3.5.4"
-val mouseVersion      = "1.3.2"
-val circeVersion      = "0.14.7"
-val fs2Version        = "3.11.0"
-val enumeratumVersion = "1.9.0"
+val catsVersion       = "2.13.0"
+val catsEffectVersion = "3.7.1"
+val mouseVersion      = "1.4.0"
+val circeVersion      = "0.14.17"
+val fs2Version        = "3.15.0"
+val enumeratumVersion = "1.9.8"
 val specs2Version     = "4.19.0"
 val enumeratum = "com.beachape" %% "enumeratum"      % enumeratumVersion
-val awsS3      = "software.amazon.awssdk" % "s3" % "2.38.3"
+val awsS3      = "software.amazon.awssdk" % "s3" % "2.59.3"
 val jaxbApi    = "javax.xml" % "jaxb-api" % "2.1"
 val collectionsCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
@@ -75,16 +75,17 @@ lazy val scala2CompileOptions = sharedScalacOptions ++
     "-Xlint",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
-    "-Ywarn-unused"
+    "-Ywarn-unused",
+    "-Xsource:3"
   )
 
 lazy val scala3CompileOptions = sharedScalacOptions ++
-  Seq("-Wunused:all", "-Xunchecked-java-output-version:11")
+  Seq("-Wunused:all", s"-Xunchecked-java-output-version:$javaVersion")
 
 
 lazy val projectSettings = Seq(
   crossScalaVersions := supportedScalaVersions,
-  Compile / scalacOptions ++= {
+  scalacOptions ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
       case Some((2, _)) => scala2CompileOptions
       case Some((3,_))  => scala3CompileOptions
