@@ -1,12 +1,12 @@
 package s3dsl.domain.auth
 
 import cats.data.NonEmptyMap
-import cats.{Eq, Order}
 import cats.implicits._
-import mouse.boolean._
+import cats.{Eq, Order}
 import enumeratum.{Enum, EnumEntry}
 import io.circe._
 import io.circe.syntax._
+import mouse.boolean._
 
 @SuppressWarnings(Array(
   "org.wartremover.warts.ExplicitImplicitTypes",
@@ -174,8 +174,8 @@ object Domain {
 
     lazy val values = findValues
 
-    final case object Allow extends Effect
-    final case object Deny extends Effect
+    case object Allow extends Effect
+    case object Deny extends Effect
   }
 
 
@@ -237,48 +237,48 @@ object Domain {
 
     lazy val values = findValues
 
-    final case object All extends S3Action("s3:*")
-    final case object GetObject extends S3Action("s3:GetObject")
-    final case object GetObjectVersion extends S3Action("s3:GetObjectVersion")
-    final case object PutObject extends S3Action("s3:PutObject")
-    final case object GetObjectAcl extends S3Action("s3:GetObjectAcl")
-    final case object GetObjectVersionAcl extends S3Action("s3:GetObjectVersionAcl")
-    final case object SetObjectAcl extends S3Action("s3:PutObjectAcl")
-    final case object SetObjectVersionAcl extends S3Action("s3:PutObjectAclVersion")
-    final case object DeleteObject extends S3Action("s3:DeleteObject")
-    final case object DeleteObjectVersion extends S3Action("s3:DeleteObjectVersion")
-    final case object ListMultipartUploadParts extends S3Action("s3:ListMultipartUploadParts")
-    final case object AbortMultipartUpload extends S3Action("s3:AbortMultipartUpload")
-    final case object RestoreObject extends S3Action("s3:RestoreObject")
-    final case object CreateBucket extends S3Action("s3:CreateBucket")
-    final case object DeleteBucket extends S3Action("s3:DeleteBucket")
-    final case object ListObjects extends S3Action("s3:ListBucket")
-    final case object ListObjectVersions extends S3Action("s3:ListBucketVersions")
-    final case object ListBuckets extends S3Action("s3:ListAllMyBuckets")
-    final case object ListBucketMultipartUploads extends S3Action("s3:ListBucketMultipartUploads")
-    final case object GetBucketAcl extends S3Action("s3:GetBucketAcl")
-    final case object SetBucketAcl extends S3Action("s3:PutBucketAcl")
-    final case object GetBucketCrossOriginConfiguration extends S3Action("s3:GetBucketCORS")
-    final case object SetBucketCrossOriginConfiguration extends S3Action("s3:PutBucketCORS")
-    final case object GetBucketVersioningConfiguration extends S3Action("s3:GetBucketVersioning")
-    final case object SetBucketVersioningConfiguration extends S3Action("s3:PutBucketVersioning")
-    final case object GetBucketRequesterPays extends S3Action("s3:GetBucketRequestPayment")
-    final case object SetBucketRequesterPays extends S3Action("s3:PutBucketRequestPayment")
-    final case object GetBucketLocation extends S3Action("s3:GetBucketLocation")
-    final case object GetBucketPolicy extends S3Action("s3:GetBucketPolicy")
-    final case object SetBucketPolicy extends S3Action("s3:PutBucketPolicy")
-    final case object DeleteBucketPolicy extends S3Action("s3:DeleteBucketPolicy")
-    final case object GetBucketNotificationConfiguration extends S3Action("s3:GetBucketNotification")
-    final case object SetBucketNotificationConfiguration extends S3Action("s3:PutBucketNotification")
-    final case object GetBucketLogging extends S3Action("s3:GetBucketLogging")
-    final case object SetBucketLogging extends S3Action("s3:PutBucketLogging")
-    final case object GetBucketTagging extends S3Action("s3:GetBucketTagging")
-    final case object SetBucketTagging extends S3Action("s3:PutBucketTagging")
-    final case object GetBucketWebsiteConfiguration extends S3Action("s3:GetBucketWebsite")
-    final case object SetBucketWebsiteConfiguration extends S3Action("s3:PutBucketWebsite")
-    final case object DeleteBucketWebsiteConfiguration extends S3Action("s3:DeleteBucketWebsite")
-    final case object GetBucketLifecycleConfiguration extends S3Action("s3:GetLifecycleConfiguration")
-    final case object SetBucketLifecycleConfiguration extends S3Action("s3:PutLifecycleConfiguration")
+    case object All extends S3Action("s3:*")
+    case object GetObject extends S3Action("s3:GetObject")
+    case object GetObjectVersion extends S3Action("s3:GetObjectVersion")
+    case object PutObject extends S3Action("s3:PutObject")
+    case object GetObjectAcl extends S3Action("s3:GetObjectAcl")
+    case object GetObjectVersionAcl extends S3Action("s3:GetObjectVersionAcl")
+    case object SetObjectAcl extends S3Action("s3:PutObjectAcl")
+    case object SetObjectVersionAcl extends S3Action("s3:PutObjectAclVersion")
+    case object DeleteObject extends S3Action("s3:DeleteObject")
+    case object DeleteObjectVersion extends S3Action("s3:DeleteObjectVersion")
+    case object ListMultipartUploadParts extends S3Action("s3:ListMultipartUploadParts")
+    case object AbortMultipartUpload extends S3Action("s3:AbortMultipartUpload")
+    case object RestoreObject extends S3Action("s3:RestoreObject")
+    case object CreateBucket extends S3Action("s3:CreateBucket")
+    case object DeleteBucket extends S3Action("s3:DeleteBucket")
+    case object ListObjects extends S3Action("s3:ListBucket")
+    case object ListObjectVersions extends S3Action("s3:ListBucketVersions")
+    case object ListBuckets extends S3Action("s3:ListAllMyBuckets")
+    case object ListBucketMultipartUploads extends S3Action("s3:ListBucketMultipartUploads")
+    case object GetBucketAcl extends S3Action("s3:GetBucketAcl")
+    case object SetBucketAcl extends S3Action("s3:PutBucketAcl")
+    case object GetBucketCrossOriginConfiguration extends S3Action("s3:GetBucketCORS")
+    case object SetBucketCrossOriginConfiguration extends S3Action("s3:PutBucketCORS")
+    case object GetBucketVersioningConfiguration extends S3Action("s3:GetBucketVersioning")
+    case object SetBucketVersioningConfiguration extends S3Action("s3:PutBucketVersioning")
+    case object GetBucketRequesterPays extends S3Action("s3:GetBucketRequestPayment")
+    case object SetBucketRequesterPays extends S3Action("s3:PutBucketRequestPayment")
+    case object GetBucketLocation extends S3Action("s3:GetBucketLocation")
+    case object GetBucketPolicy extends S3Action("s3:GetBucketPolicy")
+    case object SetBucketPolicy extends S3Action("s3:PutBucketPolicy")
+    case object DeleteBucketPolicy extends S3Action("s3:DeleteBucketPolicy")
+    case object GetBucketNotificationConfiguration extends S3Action("s3:GetBucketNotification")
+    case object SetBucketNotificationConfiguration extends S3Action("s3:PutBucketNotification")
+    case object GetBucketLogging extends S3Action("s3:GetBucketLogging")
+    case object SetBucketLogging extends S3Action("s3:PutBucketLogging")
+    case object GetBucketTagging extends S3Action("s3:GetBucketTagging")
+    case object SetBucketTagging extends S3Action("s3:PutBucketTagging")
+    case object GetBucketWebsiteConfiguration extends S3Action("s3:GetBucketWebsite")
+    case object SetBucketWebsiteConfiguration extends S3Action("s3:PutBucketWebsite")
+    case object DeleteBucketWebsiteConfiguration extends S3Action("s3:DeleteBucketWebsite")
+    case object GetBucketLifecycleConfiguration extends S3Action("s3:GetLifecycleConfiguration")
+    case object SetBucketLifecycleConfiguration extends S3Action("s3:PutLifecycleConfiguration")
   }
 
   private def decodeSet[A](c: HCursor, field: String)(implicit ev: Decoder[Set[A]]): Decoder.Result[Set[A]] =
