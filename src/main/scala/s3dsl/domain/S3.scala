@@ -108,11 +108,11 @@ object S3 {
     implicit lazy val show: Show[Permission] = Show.fromToString
     implicit lazy val eq: Eq[Permission] = Eq.fromUniversalEquals
 
-    final case object FullControl extends Permission
-    final case object Read extends Permission
-    final case object ReadAcp extends Permission
-    final case object Write extends Permission
-    final case object WriteAcp extends Permission
+    case object FullControl extends Permission
+    case object Read extends Permission
+    case object ReadAcp extends Permission
+    case object Write extends Permission
+    case object WriteAcp extends Permission
   }
 
   final case class Grant(grantee: Grantee, permission: Permission)
@@ -156,10 +156,10 @@ object S3 {
     implicit lazy val show: Show[HTTPMethod] = Show.fromToString
     implicit lazy val eq: Eq[HTTPMethod] = Eq.fromUniversalEquals
 
-    final case object DELETE extends HTTPMethod with Uppercase
-    final case object GET extends HTTPMethod with Uppercase
-    final case object POST extends HTTPMethod with Uppercase
-    final case object PUT extends HTTPMethod with Uppercase
+    case object DELETE extends HTTPMethod with Uppercase
+    case object GET extends HTTPMethod with Uppercase
+    case object POST extends HTTPMethod with Uppercase
+    case object PUT extends HTTPMethod with Uppercase
   }
 
 }
