@@ -76,7 +76,7 @@ object CodecTest extends Specification with ScalaCheck {
 
   "Effect codec" should {
     "be reversible" in {
-      val (allow, deny): (Effect, Effect) = (Effect.Allow, Effect.Deny)
+      val (allow, deny) = (Effect.Allow: Effect, Effect.Deny: Effect)
 
       allow.asJson.asString should beSome("Allow")
       deny.asJson.asString should beSome("Deny")

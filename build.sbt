@@ -1,11 +1,14 @@
 import scala.collection.Seq
 import xerial.sbt.Sonatype.*
+import ReleaseTransformations.*
+
+ThisBuild / versionScheme := Some("early-semver")
 
 organization := "com.github.wirthan"
 
 name := "s3dsl"
 
-val javaVersion = 17
+val javaVersion = 21
 val scala2_13 = "2.13.18"
 val scala3 = "3.10.1"
 val supportedScalaVersions = List(scala2_13,scala3)
@@ -128,3 +131,33 @@ sonatypeCredentialHost := "central.sonatype.com"
 ThisBuild / publishTo := sonatypePublishToBundle.value
 
 publishMavenStyle := true
+
+//
+// Releasing
+//
+
+releasePublishArtifactsAction := PgpKeys.publishSigned.value
+
+releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies,
+  inquireVersions,
+  runClean,
+  runTest,
+  setReleaseVersion,
+  commitReleaseVersion,
+  tagRelease,
+  publishArtifacts,
+  releaseStepCommand("sonatypeBundleRelease"),
+  setNextVersion,
+  commitNextVersion,
+  pushChanges
+)
+
+// Runs the release's tests and signed publishing into the local bundle only: no version change, no git, no upload.
+// The release version is set for this session only, because sbt-sonatype has no bundle target for SNAPSHOT versions.
+commands += Command.command("releaseDryRun") { state =>
+  val extracted = Project.extract(state)
+  val (newState, toReleaseVersion) = extracted.runTask(releaseVersion, state)
+  val dryRunVersion = toReleaseVersion(extracted.get(ThisBuild / version))
+  s"""set ThisBuild / version := "$dryRunVersion"""" :: "clean" :: "+test" :: "+publishSigned" :: newState
+}
