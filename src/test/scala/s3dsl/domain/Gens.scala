@@ -5,10 +5,10 @@ import cats.Applicative
 import cats.data.NonEmptyMap
 import cats.implicits._
 import org.scalacheck.Arbitrary
-import s3dsl.domain.auth.Domain._
 import org.scalacheck.cats.implicits._
-import scala.collection.immutable.SortedMap
 import org.scalacheck.Gen
+import s3dsl.domain.auth.Domain._
+import scala.collection.immutable.SortedMap
 
 @SuppressWarnings(Array("org.wartremover.warts.ExplicitImplicitTypes"))
 object Gens {
@@ -18,7 +18,7 @@ object Gens {
     kv <- keys.toList.traverse(k =>
       Applicative[Gen].map2(Gen.const(k), smallStringSetGen)((a, b) => (a, b))
     )
-  } yield SortedMap(kv: _*)
+  } yield SortedMap(kv*)
 
   private lazy val arbStringGen = Arbitrary.arbString.arbitrary
   implicit lazy val policyVersionArb: Arbitrary[Policy.Version] = Arbitrary(arbStringGen.map(Policy.Version.apply))
